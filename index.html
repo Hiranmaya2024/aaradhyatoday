@@ -15,6 +15,7 @@ body{font-family:Arial;margin:0;background:#f3fbf9;}
 .flex{display:flex;gap:10px;}
 .flex .card{flex:1;}
 .big{font-size:20px;font-weight:bold;color:#1e8e7e;}
+.small{font-size:14px;color:#666;}
 </style>
 </head>
 
@@ -24,9 +25,16 @@ body{font-family:Arial;margin:0;background:#f3fbf9;}
 
 <div class="container">
 
+<!-- TOTAL -->
 <div class="flex">
-<div class="card">Business<div id="business" class="big">₹0</div></div>
-<div class="card">Collection<div id="collection" class="big">₹0</div></div>
+<div class="card">Total Business<div id="business" class="big">₹0</div></div>
+<div class="card">Total Collection<div id="collection" class="big">₹0</div></div>
+</div>
+
+<!-- MONTH -->
+<div class="flex">
+<div class="card">This Month Business<div id="monthBusiness" class="big">₹0</div></div>
+<div class="card">This Month Collection<div id="monthCollection" class="big">₹0</div></div>
 </div>
 
 <div class="card">Pending Bills to Collect<div id="pendingBills" class="big">0</div></div>
@@ -67,11 +75,9 @@ complete:function(res){
 const data = res.data;
 const columns = Object.keys(data[0]);
 
-console.log("Detected Columns:", columns);
-
-// dynamic column detection
 const col = name => columns.find(c => normalize(c).includes(name));
 
+// MAIN COLUMNS
 const BUSINESS = col("business");
 const BALANCE = col("balance");
 const PENDING = col("pendingbills");
@@ -79,7 +85,12 @@ const RISK = col("balanceasofbusiness");
 const CREDIT = col("avgcreditcycle");
 const PARTY = col("party");
 
+// MONTHLY (K & M)
+const MONTH_BUSINESS = columns[10];
+const MONTH_COLLECTION = columns[12];
+
 let totalBusiness=0,totalBalance=0,totalPending=0;
+let monthBusiness=0,monthCollection=0;
 
 let riskArr=[],creditArr=[];
 
@@ -88,6 +99,10 @@ data.forEach(row=>{
 let business = cleanNumber(row[BUSINESS]);
 let balance = cleanNumber(row[BALANCE]);
 let pending = cleanNumber(row[PENDING]);
+
+let mBusiness = cleanNumber(row[MONTH_BUSINESS]);
+let mCollection = cleanNumber(row[MONTH_COLLECTION]);
+
 let risk = cleanNumber(row[RISK]);
 let credit = cleanNumber(row[CREDIT]);
 
@@ -95,23 +110,28 @@ totalBusiness += business;
 totalBalance += balance;
 totalPending += pending;
 
+monthBusiness += mBusiness;
+monthCollection += mCollection;
+
 if(risk>0) riskArr.push({party:row[PARTY],balance,risk});
 if(credit>45) creditArr.push({party:row[PARTY],credit});
 
 });
 
-let collection = totalBusiness - totalBalance;
+let totalCollection = totalBusiness - totalBalance;
 
-// KPI
+// KPI DISPLAY
 document.getElementById("business").innerText="₹"+totalBusiness.toLocaleString();
-document.getElementById("collection").innerText="₹"+collection.toLocaleString();
+document.getElementById("collection").innerText="₹"+totalCollection.toLocaleString();
 document.getElementById("pendingBills").innerText=totalPending.toLocaleString();
 
-// SORTING
+document.getElementById("monthBusiness").innerText="₹"+monthBusiness.toLocaleString();
+document.getElementById("monthCollection").innerText="₹"+monthCollection.toLocaleString();
+
+// SORT
 riskArr.sort((a,b)=>b.risk-a.risk);
 creditArr.sort((a,b)=>b.credit-a.credit);
 
-// DISPLAY
 document.getElementById("riskParties").innerHTML =
 riskArr.map(r=>`<li>${r.party} – ₹${r.balance.toLocaleString()} – ${r.risk}%</li>`).join("");
 
@@ -122,15 +142,15 @@ creditArr.map(c=>`<li>${c.party} – ${c.credit} days</li>`).join("");
 let target = totalBalance * 0.30;
 document.getElementById("dailyTarget").innerText="₹"+Math.round(target).toLocaleString();
 
-// CHART FIX
+// CHART
 if(chart) chart.destroy();
 
 chart = new Chart(document.getElementById("chart"),{
 type:'doughnut',
 data:{
-labels:["Business","Collection"],
+labels:["Total Business","Total Collection"],
 datasets:[{
-data:[totalBusiness,collection],
+data:[totalBusiness,totalCollection],
 backgroundColor:["#2fa36b","#1e8e7e"]
 }]
 }
