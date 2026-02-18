@@ -57,7 +57,7 @@ canvas{max-height:260px;}
 
 <script>
 
-const sheetURL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQ3bMMFf71-vdGNiWFnf7pD9XuAAUSA7J-g08ocyC2LNiVOTUHi56lB-7bKTKj0KK9nJGs9vU0THQ0E/pub?gid=1044390124&single=true&output=csv";
+const sheetURL = "YOUR_SHEET_URL_HERE";
 
 function cleanNumber(val){
 if(!val) return 0;
@@ -68,12 +68,6 @@ function findColumn(columns, keyword){
 return columns.find(col =>
 col.toLowerCase().replace(/\s/g,"").includes(keyword)
 );
-}
-
-function getRemainingDays(){
-let today = new Date();
-let lastDay = new Date(today.getFullYear(), today.getMonth()+1, 0);
-return lastDay.getDate() - today.getDate();
 }
 
 function loadData(){
@@ -99,7 +93,7 @@ const RISK_COL = findColumn(cols,"balanceas%ofbusiness");
 let totalBusiness=0,totalBalance=0,totalPending=0;
 
 let customerMap={},areaMap={};
-let riskHTML="",creditHTML="";
+let riskArr=[],creditArr=[];
 
 data.forEach(row=>{
 
@@ -108,22 +102,22 @@ let balance = cleanNumber(row[BALANCE_COL]);
 let pending = cleanNumber(row[PENDING_BILLS_COL]);
 let risk = cleanNumber(row[RISK_COL]);
 let credit = cleanNumber(row[CREDIT_COL]);
+let party = row[PARTY_COL];
+let area = row[AREA_COL];
 
 totalBusiness += business;
 totalBalance += balance;
 totalPending += pending;
 
-let party = row[PARTY_COL];
-let area = row[AREA_COL];
-
 if(party) customerMap[party]=(customerMap[party]||0)+business;
 if(area) areaMap[area]=(areaMap[area]||0)+business;
 
-if(risk>30) riskHTML += `<li>${party} – ${risk}%</li>`;
-if(credit>45) creditHTML += `<li>${party} – ${credit} days</li>`;
+if(risk>0) riskArr.push({party,balance,risk});
+if(credit>45) creditArr.push({party,credit});
 
 });
 
+// COLLECTION
 let totalCollection = totalBusiness - totalBalance;
 
 // KPI
@@ -141,15 +135,23 @@ topCustomers.map(c=>`<li>${c[0]} – ₹${c[1].toLocaleString()}</li>`).join("")
 document.getElementById("topAreas").innerHTML =
 topAreas.map(a=>`<li>${a[0]} – ₹${a[1].toLocaleString()}</li>`).join("");
 
-// RISK & CREDIT
-document.getElementById("riskParties").innerHTML = riskHTML || "✅ No high risk";
-document.getElementById("creditExceeded").innerHTML = creditHTML || "✅ All within cycle";
+// 🔴 SORT RISK DESC
+riskArr.sort((a,b)=>b.risk-a.risk);
 
-// DAILY TARGET
-let remainingDays = getRemainingDays();
-let dailyTarget = totalPending / remainingDays;
+document.getElementById("riskParties").innerHTML =
+riskArr.map(r=>`<li>${r.party} – ₹${r.balance.toLocaleString()} – ${r.risk}%</li>`).join("");
+
+// 🟠 SORT CREDIT DESC
+creditArr.sort((a,b)=>b.credit-a.credit);
+
+document.getElementById("creditExceeded").innerHTML =
+creditArr.map(c=>`<li>${c.party} – ${c.credit} days</li>`).join("");
+
+// 🎯 TODAY TARGET = 30% BALANCE
+let target = totalBalance * 0.30;
+
 document.getElementById("dailyTarget").innerText =
-"₹" + Math.round(dailyTarget).toLocaleString();
+"₹" + Math.round(target).toLocaleString();
 
 // CHART
 new Chart(document.getElementById("bizVsColl"),{
