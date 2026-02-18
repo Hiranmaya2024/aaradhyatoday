@@ -15,7 +15,8 @@ body{font-family:Arial;margin:0;background:#f3fbf9;}
 .flex{display:flex;gap:10px;}
 .flex .card{flex:1;}
 .big{font-size:20px;font-weight:bold;color:#1e8e7e;}
-.small{font-size:14px;color:#666;}
+ul{padding-left:18px;margin:0;}
+canvas{max-height:260px;}
 </style>
 </head>
 
@@ -41,11 +42,11 @@ body{font-family:Arial;margin:0;background:#f3fbf9;}
 
 <div class="card"><canvas id="chart"></canvas></div>
 
-<div class="card"><b>🚨 High Risk Parties</b><ul id="riskParties"></ul></div>
+<div class="card"><b>🚨 Top 10 High Risk Parties</b><ul id="riskParties"></ul></div>
 
-<div class="card"><b>📌 Credit Cycle Exceeded</b><ul id="creditExceeded"></ul></div>
+<div class="card"><b>📌 Top 10 Credit Cycle Exceeded</b><ul id="creditExceeded"></ul></div>
 
-<div class="card"><b>🎯 Today’s Collection Target</b><div id="dailyTarget" class="big"></div></div>
+<div class="card"><b>🎯 Today’s Collection Target (30% of Balance)</b><div id="dailyTarget" class="big"></div></div>
 
 </div>
 
@@ -124,25 +125,28 @@ let totalCollection = totalBusiness - totalBalance;
 document.getElementById("business").innerText="₹"+totalBusiness.toLocaleString();
 document.getElementById("collection").innerText="₹"+totalCollection.toLocaleString();
 document.getElementById("pendingBills").innerText=totalPending.toLocaleString();
-
 document.getElementById("monthBusiness").innerText="₹"+monthBusiness.toLocaleString();
 document.getElementById("monthCollection").innerText="₹"+monthCollection.toLocaleString();
 
-// SORT
+// SORT & LIMIT
 riskArr.sort((a,b)=>b.risk-a.risk);
 creditArr.sort((a,b)=>b.credit-a.credit);
 
+const topRisk = riskArr.slice(0,10);
+const topCredit = creditArr.slice(0,10);
+
+// DISPLAY
 document.getElementById("riskParties").innerHTML =
-riskArr.map(r=>`<li>${r.party} – ₹${r.balance.toLocaleString()} – ${r.risk}%</li>`).join("");
+topRisk.map(r=>`<li>${r.party} – ₹${r.balance.toLocaleString()} – ${r.risk}%</li>`).join("");
 
 document.getElementById("creditExceeded").innerHTML =
-creditArr.map(c=>`<li>${c.party} – ${c.credit} days</li>`).join("");
+topCredit.map(c=>`<li>${c.party} – ${c.credit} days</li>`).join("");
 
 // TARGET = 30% BALANCE
 let target = totalBalance * 0.30;
 document.getElementById("dailyTarget").innerText="₹"+Math.round(target).toLocaleString();
 
-// CHART
+// CHART SAFE RELOAD
 if(chart) chart.destroy();
 
 chart = new Chart(document.getElementById("chart"),{
