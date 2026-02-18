@@ -4,32 +4,23 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>AARADHYA TODAY</title>
 
-<link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#1e8e7e">
-
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
 
 <style>
 body{font-family:Arial;margin:0;background:#f3fbf9;}
 .header{background:linear-gradient(90deg,#1e8e7e,#2fa36b);color:white;text-align:center;padding:14px;}
-.logo{width:60px;margin-bottom:6px;}
 .container{padding:12px;}
 .card{background:white;padding:14px;margin-bottom:12px;border-radius:12px;box-shadow:0 2px 6px rgba(0,0,0,0.1);}
 .flex{display:flex;gap:10px;}
 .flex .card{flex:1;}
 .big{font-size:20px;font-weight:bold;color:#1e8e7e;}
-ul{padding-left:18px;margin:0;}
-canvas{max-height:260px;}
 </style>
 </head>
 
 <body>
 
-<div class="header">
-<img src="icon.png" class="logo"><br>
-<b>AARADHYA TODAY</b>
-</div>
+<div class="header"><b>AARADHYA TODAY</b></div>
 
 <div class="container">
 
@@ -40,12 +31,7 @@ canvas{max-height:260px;}
 
 <div class="card">Pending Bills to Collect<div id="pendingBills" class="big">0</div></div>
 
-<div class="card"><canvas id="bizVsColl"></canvas></div>
-
-<div class="flex">
-<div class="card"><b>Top Customers</b><ul id="topCustomers"></ul></div>
-<div class="card"><b>Top Areas</b><ul id="topAreas"></ul></div>
-</div>
+<div class="card"><canvas id="chart"></canvas></div>
 
 <div class="card"><b>🚨 High Risk Parties</b><ul id="riskParties"></ul></div>
 
@@ -57,17 +43,16 @@ canvas{max-height:260px;}
 
 <script>
 
-const sheetURL = "YOUR_SHEET_URL_HERE";
+const sheetURL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQ3bMMFf71-vdGNiWFnf7pD9XuAAUSA7J-g08ocyC2LNiVOTUHi56lB-7bKTKj0KK9nJGs9vU0THQ0E/pub?gid=1044390124&single=true&output=csv";
+
+let chart;
 
 function cleanNumber(val){
-if(!val) return 0;
-return Number(val.toString().replace(/[^0-9.-]/g,"")) || 0;
+return Number(String(val || 0).replace(/[^0-9.-]/g,"")) || 0;
 }
 
-function findColumn(columns, keyword){
-return columns.find(col =>
-col.toLowerCase().replace(/\s/g,"").includes(keyword)
-);
+function normalize(text){
+return text.toLowerCase().replace(/[^a-z]/g,"");
 }
 
 function loadData(){
@@ -80,86 +65,72 @@ skipEmptyLines:true,
 complete:function(res){
 
 const data = res.data;
-const cols = Object.keys(data[0]);
+const columns = Object.keys(data[0]);
 
-const BUSINESS_COL = findColumn(cols,"business");
-const BALANCE_COL = findColumn(cols,"balance");
-const PENDING_BILLS_COL = findColumn(cols,"pendingbills");
-const PARTY_COL = findColumn(cols,"party");
-const AREA_COL = findColumn(cols,"area");
-const CREDIT_COL = findColumn(cols,"avgcreditcycle");
-const RISK_COL = findColumn(cols,"balanceas%ofbusiness");
+console.log("Detected Columns:", columns);
+
+// dynamic column detection
+const col = name => columns.find(c => normalize(c).includes(name));
+
+const BUSINESS = col("business");
+const BALANCE = col("balance");
+const PENDING = col("pendingbills");
+const RISK = col("balanceasofbusiness");
+const CREDIT = col("avgcreditcycle");
+const PARTY = col("party");
 
 let totalBusiness=0,totalBalance=0,totalPending=0;
 
-let customerMap={},areaMap={};
 let riskArr=[],creditArr=[];
 
 data.forEach(row=>{
 
-let business = cleanNumber(row[BUSINESS_COL]);
-let balance = cleanNumber(row[BALANCE_COL]);
-let pending = cleanNumber(row[PENDING_BILLS_COL]);
-let risk = cleanNumber(row[RISK_COL]);
-let credit = cleanNumber(row[CREDIT_COL]);
-let party = row[PARTY_COL];
-let area = row[AREA_COL];
+let business = cleanNumber(row[BUSINESS]);
+let balance = cleanNumber(row[BALANCE]);
+let pending = cleanNumber(row[PENDING]);
+let risk = cleanNumber(row[RISK]);
+let credit = cleanNumber(row[CREDIT]);
 
 totalBusiness += business;
 totalBalance += balance;
 totalPending += pending;
 
-if(party) customerMap[party]=(customerMap[party]||0)+business;
-if(area) areaMap[area]=(areaMap[area]||0)+business;
-
-if(risk>0) riskArr.push({party,balance,risk});
-if(credit>45) creditArr.push({party,credit});
+if(risk>0) riskArr.push({party:row[PARTY],balance,risk});
+if(credit>45) creditArr.push({party:row[PARTY],credit});
 
 });
 
-// COLLECTION
-let totalCollection = totalBusiness - totalBalance;
+let collection = totalBusiness - totalBalance;
 
 // KPI
 document.getElementById("business").innerText="₹"+totalBusiness.toLocaleString();
-document.getElementById("collection").innerText="₹"+totalCollection.toLocaleString();
+document.getElementById("collection").innerText="₹"+collection.toLocaleString();
 document.getElementById("pendingBills").innerText=totalPending.toLocaleString();
 
-// TOP 5
-let topCustomers = Object.entries(customerMap).sort((a,b)=>b[1]-a[1]).slice(0,5);
-let topAreas = Object.entries(areaMap).sort((a,b)=>b[1]-a[1]).slice(0,5);
-
-document.getElementById("topCustomers").innerHTML =
-topCustomers.map(c=>`<li>${c[0]} – ₹${c[1].toLocaleString()}</li>`).join("");
-
-document.getElementById("topAreas").innerHTML =
-topAreas.map(a=>`<li>${a[0]} – ₹${a[1].toLocaleString()}</li>`).join("");
-
-// 🔴 SORT RISK DESC
+// SORTING
 riskArr.sort((a,b)=>b.risk-a.risk);
+creditArr.sort((a,b)=>b.credit-a.credit);
 
+// DISPLAY
 document.getElementById("riskParties").innerHTML =
 riskArr.map(r=>`<li>${r.party} – ₹${r.balance.toLocaleString()} – ${r.risk}%</li>`).join("");
-
-// 🟠 SORT CREDIT DESC
-creditArr.sort((a,b)=>b.credit-a.credit);
 
 document.getElementById("creditExceeded").innerHTML =
 creditArr.map(c=>`<li>${c.party} – ${c.credit} days</li>`).join("");
 
-// 🎯 TODAY TARGET = 30% BALANCE
+// TARGET = 30% BALANCE
 let target = totalBalance * 0.30;
+document.getElementById("dailyTarget").innerText="₹"+Math.round(target).toLocaleString();
 
-document.getElementById("dailyTarget").innerText =
-"₹" + Math.round(target).toLocaleString();
+// CHART FIX
+if(chart) chart.destroy();
 
-// CHART
-new Chart(document.getElementById("bizVsColl"),{
+chart = new Chart(document.getElementById("chart"),{
 type:'doughnut',
 data:{
 labels:["Business","Collection"],
 datasets:[{
-data:[totalBusiness,totalCollection],
+data:[totalBusiness,collection],
 backgroundColor:["#2fa36b","#1e8e7e"]
 }]
 }
