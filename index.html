@@ -15,16 +15,22 @@
 body{font-family:Arial;margin:0;background:#f3fbf9;}
 .header{
 background:linear-gradient(90deg,#1e8e7e,#2fa36b);
-color:white;text-align:center;padding:12px;
+color:white;text-align:center;padding:14px;
 }
-.logo{width:55px;margin-bottom:5px;}
+.logo{width:60px;margin-bottom:6px;}
 .container{padding:12px;}
-.card{background:white;padding:14px;margin-bottom:12px;border-radius:12px;
-box-shadow:0 2px 6px rgba(0,0,0,0.1);}
+.card{
+background:white;
+padding:14px;
+margin-bottom:12px;
+border-radius:12px;
+box-shadow:0 2px 6px rgba(0,0,0,0.1);
+}
 .flex{display:flex;gap:10px;}
 .flex .card{flex:1;}
 .big{font-size:20px;font-weight:bold;color:#1e8e7e;}
-ul{padding-left:18px;}
+ul{padding-left:18px;margin:0;}
+canvas{max-height:260px;}
 </style>
 </head>
 
@@ -38,17 +44,36 @@ ul{padding-left:18px;}
 <div class="container">
 
 <div class="flex">
-<div class="card">Business<div id="business" class="big">₹0</div></div>
-<div class="card">Collections<div id="collection" class="big">₹0</div></div>
+<div class="card">
+Business
+<div id="business" class="big">₹0</div>
 </div>
 
-<div class="card">No. of Sales<div id="sales" class="big">0</div></div>
+<div class="card">
+Collection
+<div id="collection" class="big">₹0</div>
+</div>
+</div>
 
-<div class="card"><canvas id="bizVsColl"></canvas></div>
+<div class="card">
+Pending Bills to Collect
+<div id="pendingBills" class="big">0</div>
+</div>
+
+<div class="card">
+<canvas id="bizVsColl"></canvas>
+</div>
 
 <div class="flex">
-<div class="card"><b>Top Customers</b><ul id="topCustomers"></ul></div>
-<div class="card"><b>Top Areas</b><ul id="topAreas"></ul></div>
+<div class="card">
+<b>Top Customers</b>
+<ul id="topCustomers"></ul>
+</div>
+
+<div class="card">
+<b>Top Areas</b>
+<ul id="topAreas"></ul>
+</div>
 </div>
 
 </div>
@@ -57,9 +82,15 @@ ul{padding-left:18px;}
 
 const sheetURL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQ3bMMFf71-vdGNiWFnf7pD9XuAAUSA7J-g08ocyC2LNiVOTUHi56lB-7bKTKj0KK9nJGs9vU0THQ0E/pub?gid=1044390124&single=true&output=csv";
 
-function cleanNumber(value){
-if(!value) return 0;
-return Number(value.toString().replace(/[^0-9.-]+/g,"")) || 0;
+function cleanNumber(val){
+if(!val) return 0;
+return Number(val.toString().replace(/[^0-9.-]/g,"")) || 0;
+}
+
+function findColumn(columns, keyword){
+return columns.find(col =>
+col.toLowerCase().replace(/\s/g,"").includes(keyword)
+);
 }
 
 function loadData(){
@@ -69,35 +100,54 @@ download:true,
 header:true,
 skipEmptyLines:true,
 
-complete:function(results){
+complete:function(res){
 
-let data = results.data;
+const data = res.data;
+const cols = Object.keys(data[0]);
 
-let totalBusiness=0,totalCollection=0,totalSales=0;
-let customerMap={},areaMap={};
+const BUSINESS_COL = findColumn(cols,"business");
+const BALANCE_COL = findColumn(cols,"balance");
+const PENDING_BILLS_COL = findColumn(cols,"pendingbills");
+const PARTY_COL = findColumn(cols,"party");
+const AREA_COL = findColumn(cols,"area");
+
+let totalBusiness = 0;
+let totalBalance = 0;
+let totalPendingBills = 0;
+
+let customerMap = {};
+let areaMap = {};
 
 data.forEach(row=>{
 
-let business = cleanNumber(row["BUSINESS"]);
-let collection = cleanNumber(row["Collections Current Month"]);
-let sales = cleanNumber(row["SaleS CURRENT MONTH"]);
+let business = cleanNumber(row[BUSINESS_COL]);
+let balance = cleanNumber(row[BALANCE_COL]);
+let pending = cleanNumber(row[PENDING_BILLS_COL]);
 
-totalBusiness+=business;
-totalCollection+=collection;
-totalSales+=sales;
+totalBusiness += business;
+totalBalance += balance;
+totalPendingBills += pending;
 
-if(row["PARTY"])
-customerMap[row["PARTY"]] = (customerMap[row["PARTY"]]||0)+business;
+let party = row[PARTY_COL];
+let area = row[AREA_COL];
 
-if(row["AREA"])
-areaMap[row["AREA"]] = (areaMap[row["AREA"]]||0)+business;
+if(party)
+customerMap[party] = (customerMap[party] || 0) + business;
+
+if(area)
+areaMap[area] = (areaMap[area] || 0) + business;
 
 });
 
-document.getElementById("business").innerText="₹"+totalBusiness.toLocaleString();
-document.getElementById("collection").innerText="₹"+totalCollection.toLocaleString();
-document.getElementById("sales").innerText=totalSales.toLocaleString();
+// COLLECTION
+let totalCollection = totalBusiness - totalBalance;
 
+// KPI DISPLAY
+document.getElementById("business").innerText = "₹" + totalBusiness.toLocaleString();
+document.getElementById("collection").innerText = "₹" + totalCollection.toLocaleString();
+document.getElementById("pendingBills").innerText = totalPendingBills.toLocaleString();
+
+// TOP 5
 let topCustomers = Object.entries(customerMap).sort((a,b)=>b[1]-a[1]).slice(0,5);
 let topAreas = Object.entries(areaMap).sort((a,b)=>b[1]-a[1]).slice(0,5);
 
@@ -107,10 +157,16 @@ topCustomers.map(c=>`<li>${c[0]} – ₹${c[1].toLocaleString()}</li>`).join("")
 document.getElementById("topAreas").innerHTML =
 topAreas.map(a=>`<li>${a[0]} – ₹${a[1].toLocaleString()}</li>`).join("");
 
+// CHART
 new Chart(document.getElementById("bizVsColl"),{
 type:'doughnut',
-data:{labels:["Business","Collection"],
-datasets:[{data:[totalBusiness,totalCollection]}]}
+data:{
+labels:["Business","Collection"],
+datasets:[{
+data:[totalBusiness,totalCollection],
+backgroundColor:["#2fa36b","#1e8e7e"]
+}]
+}
 });
 
 }
