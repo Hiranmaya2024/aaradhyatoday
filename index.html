@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>AARADHYA TODAY</title>
+
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#1e8e7e">
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+
+<style>
+body{font-family:Arial;margin:0;background:#f3fbf9;}
+.header{
+background:linear-gradient(90deg,#1e8e7e,#2fa36b);
+color:white;text-align:center;padding:12px;
+}
+.logo{width:55px;margin-bottom:5px;}
+.container{padding:12px;}
+.card{background:white;padding:14px;margin-bottom:12px;border-radius:12px;
+box-shadow:0 2px 6px rgba(0,0,0,0.1);}
+.flex{display:flex;gap:10px;}
+.flex .card{flex:1;}
+.big{font-size:20px;font-weight:bold;color:#1e8e7e;}
+ul{padding-left:18px;}
+</style>
+</head>
+
+<body>
+
+<div class="header">
+<img src="icon.png" class="logo"><br>
+<b>AARADHYA TODAY</b>
+</div>
+
+<div class="container">
+
+<div class="flex">
+<div class="card">Business<div id="business" class="big">₹0</div></div>
+<div class="card">Collections<div id="collection" class="big">₹0</div></div>
+</div>
+
+<div class="card">No. of Sales<div id="sales" class="big">0</div></div>
+
+<div class="card"><canvas id="bizVsColl"></canvas></div>
+
+<div class="flex">
+<div class="card"><b>Top Customers</b><ul id="topCustomers"></ul></div>
+<div class="card"><b>Top Areas</b><ul id="topAreas"></ul></div>
+</div>
+
+</div>
+
+<script>
+
+const sheetURL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQ3bMMFf71-vdGNiWFnf7pD9XuAAUSA7J-g08ocyC2LNiVOTUHi56lB-7bKTKj0KK9nJGs9vU0THQ0E/pub?gid=1044390124&single=true&output=csv";
+
+function cleanNumber(value){
+if(!value) return 0;
+return Number(value.toString().replace(/[^0-9.-]+/g,"")) || 0;
+}
+
+function loadData(){
+
+Papa.parse(sheetURL,{
+download:true,
+header:true,
+skipEmptyLines:true,
+
+complete:function(results){
+
+let data = results.data;
+
+let totalBusiness=0,totalCollection=0,totalSales=0;
+let customerMap={},areaMap={};
+
+data.forEach(row=>{
+
+let business = cleanNumber(row["BUSINESS"]);
+let collection = cleanNumber(row["Collections Current Month"]);
+let sales = cleanNumber(row["SaleS CURRENT MONTH"]);
+
+totalBusiness+=business;
+totalCollection+=collection;
+totalSales+=sales;
+
+if(row["PARTY"])
+customerMap[row["PARTY"]] = (customerMap[row["PARTY"]]||0)+business;
+
+if(row["AREA"])
+areaMap[row["AREA"]] = (areaMap[row["AREA"]]||0)+business;
+
+});
+
+document.getElementById("business").innerText="₹"+totalBusiness.toLocaleString();
+document.getElementById("collection").innerText="₹"+totalCollection.toLocaleString();
+document.getElementById("sales").innerText=totalSales.toLocaleString();
+
+let topCustomers = Object.entries(customerMap).sort((a,b)=>b[1]-a[1]).slice(0,5);
+let topAreas = Object.entries(areaMap).sort((a,b)=>b[1]-a[1]).slice(0,5);
+
+document.getElementById("topCustomers").innerHTML =
+topCustomers.map(c=>`<li>${c[0]} – ₹${c[1].toLocaleString()}</li>`).join("");
+
+document.getElementById("topAreas").innerHTML =
+topAreas.map(a=>`<li>${a[0]} – ₹${a[1].toLocaleString()}</li>`).join("");
+
+new Chart(document.getElementById("bizVsColl"),{
+type:'doughnut',
+data:{labels:["Business","Collection"],
+datasets:[{data:[totalBusiness,totalCollection]}]}
+});
+
+}
+
+});
+
+}
+
+loadData();
+setInterval(loadData,300000);
+
+</script>
+
+</body>
+</html>
