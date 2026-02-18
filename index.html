@@ -2,7 +2,6 @@
 <html>
 <head>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
 <title>AARADHYA TODAY</title>
 
 <link rel="manifest" href="manifest.json">
@@ -13,19 +12,10 @@
 
 <style>
 body{font-family:Arial;margin:0;background:#f3fbf9;}
-.header{
-background:linear-gradient(90deg,#1e8e7e,#2fa36b);
-color:white;text-align:center;padding:14px;
-}
+.header{background:linear-gradient(90deg,#1e8e7e,#2fa36b);color:white;text-align:center;padding:14px;}
 .logo{width:60px;margin-bottom:6px;}
 .container{padding:12px;}
-.card{
-background:white;
-padding:14px;
-margin-bottom:12px;
-border-radius:12px;
-box-shadow:0 2px 6px rgba(0,0,0,0.1);
-}
+.card{background:white;padding:14px;margin-bottom:12px;border-radius:12px;box-shadow:0 2px 6px rgba(0,0,0,0.1);}
 .flex{display:flex;gap:10px;}
 .flex .card{flex:1;}
 .big{font-size:20px;font-weight:bold;color:#1e8e7e;}
@@ -44,37 +34,24 @@ canvas{max-height:260px;}
 <div class="container">
 
 <div class="flex">
-<div class="card">
-Business
-<div id="business" class="big">₹0</div>
+<div class="card">Business<div id="business" class="big">₹0</div></div>
+<div class="card">Collection<div id="collection" class="big">₹0</div></div>
 </div>
 
-<div class="card">
-Collection
-<div id="collection" class="big">₹0</div>
-</div>
-</div>
+<div class="card">Pending Bills to Collect<div id="pendingBills" class="big">0</div></div>
 
-<div class="card">
-Pending Bills to Collect
-<div id="pendingBills" class="big">0</div>
-</div>
-
-<div class="card">
-<canvas id="bizVsColl"></canvas>
-</div>
+<div class="card"><canvas id="bizVsColl"></canvas></div>
 
 <div class="flex">
-<div class="card">
-<b>Top Customers</b>
-<ul id="topCustomers"></ul>
+<div class="card"><b>Top Customers</b><ul id="topCustomers"></ul></div>
+<div class="card"><b>Top Areas</b><ul id="topAreas"></ul></div>
 </div>
 
-<div class="card">
-<b>Top Areas</b>
-<ul id="topAreas"></ul>
-</div>
-</div>
+<div class="card"><b>🚨 High Risk Parties</b><ul id="riskParties"></ul></div>
+
+<div class="card"><b>📌 Credit Cycle Exceeded</b><ul id="creditExceeded"></ul></div>
+
+<div class="card"><b>🎯 Today’s Collection Target</b><div id="dailyTarget" class="big"></div></div>
 
 </div>
 
@@ -91,6 +68,12 @@ function findColumn(columns, keyword){
 return columns.find(col =>
 col.toLowerCase().replace(/\s/g,"").includes(keyword)
 );
+}
+
+function getRemainingDays(){
+let today = new Date();
+let lastDay = new Date(today.getFullYear(), today.getMonth()+1, 0);
+return lastDay.getDate() - today.getDate();
 }
 
 function loadData(){
@@ -110,42 +93,43 @@ const BALANCE_COL = findColumn(cols,"balance");
 const PENDING_BILLS_COL = findColumn(cols,"pendingbills");
 const PARTY_COL = findColumn(cols,"party");
 const AREA_COL = findColumn(cols,"area");
+const CREDIT_COL = findColumn(cols,"avgcreditcycle");
+const RISK_COL = findColumn(cols,"balanceas%ofbusiness");
 
-let totalBusiness = 0;
-let totalBalance = 0;
-let totalPendingBills = 0;
+let totalBusiness=0,totalBalance=0,totalPending=0;
 
-let customerMap = {};
-let areaMap = {};
+let customerMap={},areaMap={};
+let riskHTML="",creditHTML="";
 
 data.forEach(row=>{
 
 let business = cleanNumber(row[BUSINESS_COL]);
 let balance = cleanNumber(row[BALANCE_COL]);
 let pending = cleanNumber(row[PENDING_BILLS_COL]);
+let risk = cleanNumber(row[RISK_COL]);
+let credit = cleanNumber(row[CREDIT_COL]);
 
 totalBusiness += business;
 totalBalance += balance;
-totalPendingBills += pending;
+totalPending += pending;
 
 let party = row[PARTY_COL];
 let area = row[AREA_COL];
 
-if(party)
-customerMap[party] = (customerMap[party] || 0) + business;
+if(party) customerMap[party]=(customerMap[party]||0)+business;
+if(area) areaMap[area]=(areaMap[area]||0)+business;
 
-if(area)
-areaMap[area] = (areaMap[area] || 0) + business;
+if(risk>30) riskHTML += `<li>${party} – ${risk}%</li>`;
+if(credit>45) creditHTML += `<li>${party} – ${credit} days</li>`;
 
 });
 
-// COLLECTION
 let totalCollection = totalBusiness - totalBalance;
 
-// KPI DISPLAY
-document.getElementById("business").innerText = "₹" + totalBusiness.toLocaleString();
-document.getElementById("collection").innerText = "₹" + totalCollection.toLocaleString();
-document.getElementById("pendingBills").innerText = totalPendingBills.toLocaleString();
+// KPI
+document.getElementById("business").innerText="₹"+totalBusiness.toLocaleString();
+document.getElementById("collection").innerText="₹"+totalCollection.toLocaleString();
+document.getElementById("pendingBills").innerText=totalPending.toLocaleString();
 
 // TOP 5
 let topCustomers = Object.entries(customerMap).sort((a,b)=>b[1]-a[1]).slice(0,5);
@@ -156,6 +140,16 @@ topCustomers.map(c=>`<li>${c[0]} – ₹${c[1].toLocaleString()}</li>`).join("")
 
 document.getElementById("topAreas").innerHTML =
 topAreas.map(a=>`<li>${a[0]} – ₹${a[1].toLocaleString()}</li>`).join("");
+
+// RISK & CREDIT
+document.getElementById("riskParties").innerHTML = riskHTML || "✅ No high risk";
+document.getElementById("creditExceeded").innerHTML = creditHTML || "✅ All within cycle";
+
+// DAILY TARGET
+let remainingDays = getRemainingDays();
+let dailyTarget = totalPending / remainingDays;
+document.getElementById("dailyTarget").innerText =
+"₹" + Math.round(dailyTarget).toLocaleString();
 
 // CHART
 new Chart(document.getElementById("bizVsColl"),{
