@@ -8,40 +8,132 @@
 <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
 
 <style>
-body{font-family:Arial;margin:0;background:#f3fbf9;}
 
+*{box-sizing:border-box}
+
+body{
+font-family:Arial, sans-serif;
+margin:0;
+background:#f3fbf9;
+}
+
+/* HEADER */
 .header{
+position:sticky;
+top:0;
+z-index:1000;
 background:linear-gradient(90deg,#1e8e7e,#2fa36b);
 color:white;
 text-align:center;
-padding:14px;
+padding:12px 10px;
 }
 
-.topStats{margin-top:8px;font-size:13px;}
-.progressBox{background:#ffffff40;border-radius:10px;height:8px;margin:6px 20px;}
-#progressBar{height:8px;width:0%;border-radius:10px;background:red;}
+.topStats{
+margin-top:6px;
+font-size:13px;
+}
 
-.container{padding:12px;}
+.progressBox{
+background:#ffffff40;
+border-radius:10px;
+height:8px;
+margin:6px auto;
+max-width:500px;
+}
+
+#progressBar{
+height:8px;
+width:0%;
+border-radius:10px;
+background:red;
+}
+
+/* MAIN CONTAINER */
+.container{
+padding:12px;
+max-width:1400px;
+margin:auto;
+}
+
+/* GRID SYSTEM */
+.dashboard-grid{
+display:grid;
+gap:12px;
+grid-template-columns:repeat(auto-fit,minmax(280px,1fr));
+}
+
+/* CARD */
 .card{
 background:white;
 padding:14px;
-margin-bottom:12px;
-border-radius:12px;
-box-shadow:0 2px 6px rgba(0,0,0,0.1);
+border-radius:14px;
+box-shadow:0 2px 8px rgba(0,0,0,0.08);
+width:100%;
 }
 
-.big{font-size:17px;font-weight:bold;color:#1e8e7e;line-height:1.6;}
+.big{
+font-size:clamp(15px,2vw,18px);
+font-weight:bold;
+color:#1e8e7e;
+line-height:1.6;
+}
 
-ul{padding-left:18px;margin:0;}
-li{cursor:pointer;margin-bottom:6px;}
+ul{
+padding-left:18px;
+margin:0;
+max-height:260px;
+overflow:auto;
+}
 
-button{padding:10px;border:none;border-radius:8px;margin:5px 5px 0 0;font-weight:bold;}
+li{
+cursor:pointer;
+margin-bottom:6px;
+font-size:14px;
+}
+
+/* PARTY CARD */
+#partyCard{
+position:sticky;
+top:80px;
+}
+
+/* BUTTONS */
+button{
+padding:12px;
+border:none;
+border-radius:10px;
+font-weight:bold;
+font-size:14px;
+min-width:110px;
+}
+
+.action-grid{
+display:flex;
+flex-wrap:wrap;
+gap:8px;
+margin-top:10px;
+}
+
 .call{background:#2563eb;color:white;}
 .whatsapp{background:#16a34a;color:white;}
 .collect{background:#f59e0b;color:white;}
 .bill{background:#7c3aed;color:white;}
 
-.redText{color:red;font-weight:bold;}
+.redText{color:red;font-weight:bold}
+
+/* MOBILE */
+@media (max-width:480px){
+button{flex:1 1 45%;}
+ul{max-height:220px;}
+}
+
+/* LARGE DESKTOP */
+@media (min-width:1200px){
+.dashboard-grid{
+grid-template-columns:repeat(3,1fr);
+}
+}
+
 </style>
 </head>
 
@@ -54,19 +146,19 @@ button{padding:10px;border:none;border-radius:8px;margin:5px 5px 0 0;font-weight
 <div class="topStats">
 <div id="totalBusiness"></div>
 <div id="totalCollection"></div>
-
 <div class="progressBox"><div id="progressBar"></div></div>
 <div id="businessStatus"></div>
 </div>
 </div>
 
 <div class="container">
+<div class="dashboard-grid">
 
 <!-- PARTY CARD -->
 <div class="card" id="partyCard" style="display:none;border:2px solid #1e8e7e;">
 <b>👤 Party Details</b>
 <div id="partyDetails" class="big"></div>
-<div id="actionButtons"></div>
+<div id="actionButtons" class="action-grid"></div>
 </div>
 
 <!-- QUICK STATS -->
@@ -101,6 +193,7 @@ button{padding:10px;border:none;border-radius:8px;margin:5px 5px 0 0;font-weight
 <ul id="creditExceeded"></ul>
 </div>
 
+</div>
 </div>
 
 <script>
