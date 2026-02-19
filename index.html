@@ -10,25 +10,84 @@
 
 <style>
 body{font-family:Arial;margin:0;background:#f3fbf9;}
-.header{background:linear-gradient(90deg,#1e8e7e,#2fa36b);color:white;text-align:center;padding:14px;}
+
+.header{
+background:linear-gradient(90deg,#1e8e7e,#2fa36b);
+color:white;
+text-align:center;
+padding:14px;
+}
+
+.topStats{margin-top:8px;font-size:13px;}
+
+.progressBox{
+background:#ffffff40;
+border-radius:10px;
+height:8px;
+margin:6px 20px;
+}
+
+#progressBar{
+height:8px;
+width:0%;
+border-radius:10px;
+background:red;
+}
+
 .container{padding:12px;}
-.card{background:white;padding:14px;margin-bottom:12px;border-radius:12px;box-shadow:0 2px 6px rgba(0,0,0,0.1);}
-.big{font-size:17px;font-weight:bold;color:#1e8e7e;line-height:1.6;}
+
+.card{
+background:white;
+padding:14px;
+margin-bottom:12px;
+border-radius:12px;
+box-shadow:0 2px 6px rgba(0,0,0,0.1);
+}
+
+.big{
+font-size:17px;
+font-weight:bold;
+color:#1e8e7e;
+line-height:1.6;
+}
+
 ul{padding-left:18px;margin:0;}
 li{cursor:pointer;margin-bottom:6px;}
-button{padding:10px;border:none;border-radius:8px;margin:5px 5px 0 0;font-weight:bold;}
+
+button{
+padding:10px;
+border:none;
+border-radius:8px;
+margin:5px 5px 0 0;
+font-weight:bold;
+}
+
 .call{background:#2563eb;color:white;}
 .whatsapp{background:#16a34a;color:white;}
 .collect{background:#f59e0b;color:white;}
 .bill{background:#7c3aed;color:white;}
+
+.redText{color:red;font-weight:bold;}
 </style>
 </head>
 
 <body>
 
 <div class="header">
-<b>AARADHYA TODAY</b><br>
-<span id="tourArea"></span>
+<b>AARADHYA TODAY</b>
+
+<div id="tourArea"></div>
+
+<div class="topStats">
+<div id="totalBusiness"></div>
+<div id="totalCollection"></div>
+
+<div class="progressBox">
+<div id="progressBar"></div>
+</div>
+
+<div id="businessStatus"></div>
+</div>
 </div>
 
 <div class="container">
@@ -70,7 +129,7 @@ button{padding:10px;border:none;border-radius:8px;margin:5px 5px 0 0;font-weight
 
 <script>
 
-const sheetURL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQ3bMMFf71-vdGNiWFnf7pD9XuAAUSA7J-g08ocyC2LNiVOTUHi56lB-7bKTKj0KK9nJGs9vU0THQ0E/pub?gid=1044390124&single=true&output=csv";
+const sheetURL = "YOUR_GOOGLE_SHEET_CSV_LINK";
 
 const tourPlan = {
 Monday:["Juria"],
@@ -114,14 +173,16 @@ const AREA = col("area");
 const PARTY = col("party");
 const STATUS = col("accountstatus");
 const BALANCE = col("balance");
+const BUSINESS = col("business");
 const BUSINESS_MTD = col("businesscurrentmonth");
 const COLLECTION_MTD = col("collectionscurrentmonth");
 const REACTIVATE = col("paymentneededtoreactivate");
-const FY_BUSINESS = col("business");
-const RISK = col("balanceasofbusiness");
 const CREDIT = col("avgcreditcycle");
+const RISK = col("balanceasofbusiness");
 
-let totalShops = data.length, active=0,inactive=0;
+let fyBusinessTotal=0, fyBalanceTotal=0;
+
+let totalShops=data.length, active=0,inactive=0;
 let totalBusiness=0,totalCollection=0;
 
 let tourShops=0,tourActive=0,tourInactive=0;
@@ -136,6 +197,9 @@ data.forEach(row=>{
 let status=(row[STATUS]||"").toUpperCase();
 
 if(status==="ACTIVE") active++; else inactive++;
+
+fyBusinessTotal+=cleanNumber(row[BUSINESS]);
+fyBalanceTotal+=cleanNumber(row[BALANCE]);
 
 let b=cleanNumber(row[BUSINESS_MTD]);
 let c=cleanNumber(row[COLLECTION_MTD]);
@@ -155,23 +219,33 @@ tourCollection+=c;
 let balance=cleanNumber(row[BALANCE]);
 areaBalance+=balance;
 
-todayPartyArr.push({
-name:row[PARTY],
-balance
-});
+todayPartyArr.push({name:row[PARTY],balance});
 
 let credit=cleanNumber(row[CREDIT]);
-
-if(credit>45){
-creditArr.push({
-name:row[PARTY],
-credit
-});
-}
+if(credit>45) creditArr.push({name:row[PARTY],credit});
 
 }
 
 });
+
+let totalCollectionFY = fyBusinessTotal - fyBalanceTotal;
+let statusPercent = fyBusinessTotal ? (totalCollectionFY / fyBusinessTotal)*100 : 0;
+
+document.getElementById("totalBusiness").innerHTML =
+`💼 Business: ₹${Math.round(fyBusinessTotal).toLocaleString()}`;
+
+document.getElementById("totalCollection").innerHTML =
+`💰 Collection: ₹${Math.round(totalCollectionFY).toLocaleString()}`;
+
+document.getElementById("businessStatus").innerHTML =
+`Status: ${statusPercent.toFixed(0)}%`;
+
+let bar = document.getElementById("progressBar");
+bar.style.width = statusPercent+"%";
+
+if(statusPercent<40) bar.style.background="red";
+else if(statusPercent<70) bar.style.background="orange";
+else bar.style.background="limegreen";
 
 document.getElementById("quickStats").innerHTML=
 `Total Shops: ${totalShops}<br>
@@ -212,36 +286,40 @@ ${c.name} – ${c.credit} days
 </li>`).join("");
 
 }
-
 });
-
 }
 
 function showParty(name){
 
-const data = sheetData;
-const columns = Object.keys(data[0]);
-const col = n => columns.find(c => normalize(c).includes(n));
+const data=sheetData;
+const columns=Object.keys(data[0]);
+const col=n=>columns.find(c=>normalize(c).includes(n));
 
-const PARTY = col("party");
-const AREA = col("area");
-const STATUS = col("accountstatus");
-const BALANCE = col("balance");
-const REACTIVATE = col("paymentneededtoreactivate");
-const FY_BUSINESS = col("business");
-const BUSINESS_MTD = col("businesscurrentmonth");
-const COLLECTION_MTD = col("collectionscurrentmonth");
-const CREDIT = col("avgcreditcycle");
-const RISK = col("balanceasofbusiness");
+const PARTY=col("party");
+const AREA=col("area");
+const STATUS=col("accountstatus");
+const BALANCE=col("balance");
+const REACTIVATE=col("paymentneededtoreactivate");
+const FY_BUSINESS=col("business");
+const BUSINESS_MTD=col("businesscurrentmonth");
+const COLLECTION_MTD=col("collectionscurrentmonth");
+const CREDIT=col("avgcreditcycle");
+const RISK=col("balanceasofbusiness");
 
-let party = data.find(p => p[PARTY] === name);
+let party=data.find(p=>p[PARTY]===name);
 
 document.getElementById("partyCard").style.display="block";
+
+if(party[STATUS]==="BLOCK"){
+partyCard.style.border="2px solid red";
+}else{
+partyCard.style.border="2px solid #1e8e7e";
+}
 
 document.getElementById("partyDetails").innerHTML=`
 <b>${name}</b><br><br>
 Area: ${party[AREA]}<br>
-Status: ${party[STATUS]}<br>
+Status: <span class="${party[STATUS]==='BLOCK'?'redText':''}">${party[STATUS]}</span><br>
 Balance: ₹${cleanNumber(party[BALANCE]).toLocaleString()}<br>
 Reactivate by Paying: ₹${cleanNumber(party[REACTIVATE]).toLocaleString()}<br><br>
 FY Business: ₹${cleanNumber(party[FY_BUSINESS]).toLocaleString()}<br>
@@ -252,10 +330,10 @@ Balance % of Business: ${party[RISK]}%
 `;
 
 document.getElementById("actionButtons").innerHTML=`
-<button class="call" onclick="alert('Call feature')">📞 Call</button>
-<button class="whatsapp" onclick="alert('WhatsApp feature')">💬 WhatsApp</button>
-<button class="collect" onclick="alert('Collection entry')">💰 Collect</button>
-<button class="bill" onclick="alert('Billing screen')">🧾 Bill</button>
+<button class="call">📞 Call</button>
+<button class="whatsapp">💬 WhatsApp</button>
+<button class="collect">💰 Collect</button>
+<button class="bill">🧾 Bill</button>
 `;
 
 window.scrollTo({top:0,behavior:"smooth"});
