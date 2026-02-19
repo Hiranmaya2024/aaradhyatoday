@@ -13,8 +13,14 @@ body{font-family:Arial;margin:0;background:#f3fbf9;}
 .header{background:linear-gradient(90deg,#1e8e7e,#2fa36b);color:white;text-align:center;padding:14px;}
 .container{padding:12px;}
 .card{background:white;padding:14px;margin-bottom:12px;border-radius:12px;box-shadow:0 2px 6px rgba(0,0,0,0.1);}
-.big{font-size:18px;font-weight:bold;color:#1e8e7e;line-height:1.6;}
+.big{font-size:17px;font-weight:bold;color:#1e8e7e;line-height:1.6;}
 ul{padding-left:18px;margin:0;}
+li{cursor:pointer;margin-bottom:6px;}
+button{padding:10px;border:none;border-radius:8px;margin:5px 5px 0 0;font-weight:bold;}
+.call{background:#2563eb;color:white;}
+.whatsapp{background:#16a34a;color:white;}
+.collect{background:#f59e0b;color:white;}
+.bill{background:#7c3aed;color:white;}
 </style>
 </head>
 
@@ -26,6 +32,13 @@ ul{padding-left:18px;margin:0;}
 </div>
 
 <div class="container">
+
+<div class="card" id="partyCard" style="display:none;border:2px solid #1e8e7e;">
+<b>👤 Party Details</b>
+<div id="partyDetails" class="big"></div>
+
+<div id="actionButtons"></div>
+</div>
 
 <div class="card">
 <b>📊 Quick Stats – All Areas (MTD)</b>
@@ -58,7 +71,6 @@ ul{padding-left:18px;margin:0;}
 
 const sheetURL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQ3bMMFf71-vdGNiWFnf7pD9XuAAUSA7J-g08ocyC2LNiVOTUHi56lB-7bKTKj0KK9nJGs9vU0THQ0E/pub?gid=1044390124&single=true&output=csv";
 
-// TOUR PLAN
 const tourPlan = {
 Monday:["Juria"],
 Tuesday:["Ghess"],
@@ -69,7 +81,7 @@ Saturday:["Paikmal","Mandosil"]
 };
 
 function cleanNumber(val){
-return Number(String(val || 0).replace(/[^0-9.-]/g,"")) || 0;
+return Number(String(val||0).replace(/[^0-9.-]/g,""))||0;
 }
 
 function normalize(text){
@@ -79,10 +91,10 @@ return text.toLowerCase().replace(/[^a-z]/g,"");
 function loadData(){
 
 const today = new Date().toLocaleDateString("en-US",{weekday:"long"});
-const todayAreas = tourPlan[today] || [];
+const todayAreas = tourPlan[today]||[];
 
 document.getElementById("tourArea").innerText =
-today + " Tour → " + todayAreas.join(", ");
+today+" Tour → "+todayAreas.join(", ");
 
 Papa.parse(sheetURL,{
 download:true,
@@ -91,7 +103,9 @@ skipEmptyLines:true,
 
 complete:function(res){
 
-const data = res.data;
+window.sheetData = res.data;
+const data = sheetData;
+
 const columns = Object.keys(data[0]);
 const col = name => columns.find(c => normalize(c).includes(name));
 
@@ -104,48 +118,41 @@ const COLLECTION_MTD = col("collectionscurrentmonth");
 const RISK = col("balanceasofbusiness");
 const CREDIT = col("avgcreditcycle");
 
-// 🔷 OVERALL
-let totalShops = data.length;
-let active = 0, inactive = 0;
-let totalBusiness = 0, totalCollection = 0;
+let totalShops = data.length, active=0,inactive=0;
+let totalBusiness=0,totalCollection=0;
 
-// 🔷 TOUR
-let tourShops = 0, tourActive = 0, tourInactive = 0;
-let tourBusiness = 0, tourCollection = 0;
-let areaBalance = 0;
+let tourShops=0,tourActive=0,tourInactive=0;
+let tourBusiness=0,tourCollection=0;
+let areaBalance=0;
 
 let riskArr=[],creditArr=[];
 
 data.forEach(row=>{
 
-let status = (row[STATUS] || "").toUpperCase();
+let status=(row[STATUS]||"").toUpperCase();
 
-if(status === "ACTIVE") active++;
-else inactive++;
+if(status==="ACTIVE") active++; else inactive++;
 
-let b = cleanNumber(row[BUSINESS_MTD]);
-let c = cleanNumber(row[COLLECTION_MTD]);
+let b=cleanNumber(row[BUSINESS_MTD]);
+let c=cleanNumber(row[COLLECTION_MTD]);
 
-totalBusiness += b;
-totalCollection += c;
+totalBusiness+=b;
+totalCollection+=c;
 
-let partyArea = row[AREA];
-
-if(todayAreas.includes(partyArea)){
+if(todayAreas.includes(row[AREA])){
 
 tourShops++;
 
-if(status === "ACTIVE") tourActive++;
-else tourInactive++;
+if(status==="ACTIVE") tourActive++; else tourInactive++;
 
-tourBusiness += b;
-tourCollection += c;
+tourBusiness+=b;
+tourCollection+=c;
 
-let balance = cleanNumber(row[BALANCE]);
-let risk = cleanNumber(row[RISK]);
-let credit = cleanNumber(row[CREDIT]);
+let balance=cleanNumber(row[BALANCE]);
+let risk=cleanNumber(row[RISK]);
+let credit=cleanNumber(row[CREDIT]);
 
-areaBalance += balance;
+areaBalance+=balance;
 
 if(risk>0) riskArr.push({party:row[PARTY],balance,risk});
 if(credit>45) creditArr.push({party:row[PARTY],credit});
@@ -153,18 +160,16 @@ if(credit>45) creditArr.push({party:row[PARTY],credit});
 
 });
 
-// 🔷 QUICK STATS
-document.getElementById("quickStats").innerHTML =
+document.getElementById("quickStats").innerHTML=
 `Total Shops: ${totalShops}<br>
 Active: ${active} | Inactive: ${inactive}<br>
 MTD Business: ₹${Math.round(totalBusiness).toLocaleString()}<br>
 MTD Collection: ₹${Math.round(totalCollection).toLocaleString()}`;
 
-// 🔷 TOUR STATS
-let target = tourBusiness * 0.30;
-let achievement = target ? (tourCollection/target*100) : 0;
+let target=tourBusiness*0.30;
+let achievement=target?(tourCollection/target*100):0;
 
-document.getElementById("tourStats").innerHTML =
+document.getElementById("tourStats").innerHTML=
 `Total Shops: ${tourShops}<br>
 Active: ${tourActive} | Inactive: ${tourInactive}<br>
 MTD Business: ₹${Math.round(tourBusiness).toLocaleString()}<br>
@@ -172,25 +177,90 @@ MTD Collection: ₹${Math.round(tourCollection).toLocaleString()}<br>
 Target: ₹${Math.round(target).toLocaleString()}<br>
 Achievement: ${achievement.toFixed(0)}%`;
 
-// 🔷 TARGET FROM BALANCE
-let dailyTarget = areaBalance * 0.30;
-document.getElementById("dailyTarget").innerText =
-"₹" + Math.round(dailyTarget).toLocaleString();
+document.getElementById("dailyTarget").innerText=
+"₹"+Math.round(areaBalance*0.30).toLocaleString();
 
-// 🔷 TOP 10
 riskArr.sort((a,b)=>b.risk-a.risk);
 creditArr.sort((a,b)=>b.credit-a.credit);
 
-document.getElementById("riskParties").innerHTML =
-riskArr.slice(0,10).map(r=>`<li>${r.party} – ₹${r.balance.toLocaleString()} – ${r.risk}%</li>`).join("");
+document.getElementById("riskParties").innerHTML=
+riskArr.slice(0,10).map(r=>
+`<li onclick="showParty('${r.party.replace(/'/g,"")}')">
+${r.party} – ₹${r.balance.toLocaleString()} – ${r.risk}%
+</li>`).join("");
 
-document.getElementById("creditExceeded").innerHTML =
-creditArr.slice(0,10).map(c=>`<li>${c.party} – ${c.credit} days</li>`).join("");
+document.getElementById("creditExceeded").innerHTML=
+creditArr.slice(0,10).map(c=>
+`<li onclick="showParty('${c.party.replace(/'/g,"")}')">
+${c.party} – ${c.credit} days
+</li>`).join("");
 
 }
 
 });
 
+}
+
+function showParty(name){
+
+const columns = Object.keys(sheetData[0]);
+const col = n => columns.find(c => normalize(c).includes(n));
+
+const PARTY = col("party");
+const AREA = col("area");
+const STATUS = col("accountstatus");
+const BALANCE = col("balance");
+const REACTIVATE = col("paymentneededtoreactivate");
+const FY_BUSINESS = col("business");
+const BUSINESS_MTD = col("businesscurrentmonth");
+const COLLECTION_MTD = col("collectionscurrentmonth");
+const CREDIT = col("avgcreditcycle");
+const RISK = col("balanceasofbusiness");
+
+let party = sheetData.find(p => p[PARTY] === name);
+
+document.getElementById("partyCard").style.display="block";
+
+document.getElementById("partyDetails").innerHTML=`
+
+<b>${name}</b><br><br>
+Area: ${party[AREA]}<br>
+Status: ${party[STATUS]}<br>
+Balance: ₹${cleanNumber(party[BALANCE]).toLocaleString()}<br>
+Reactivate by Paying: ₹${cleanNumber(party[REACTIVATE]).toLocaleString()}<br><br>
+
+FY Business: ₹${cleanNumber(party[FY_BUSINESS]).toLocaleString()}<br>
+MTD Business: ₹${cleanNumber(party[BUSINESS_MTD]).toLocaleString()}<br>
+MTD Collection: ₹${cleanNumber(party[COLLECTION_MTD]).toLocaleString()}<br><br>
+
+Avg Credit Cycle: ${party[CREDIT]} days<br>
+Balance % of Business: ${party[RISK]}%
+`;
+
+document.getElementById("actionButtons").innerHTML=`
+<button class="call" onclick="callParty()">📞 Call</button>
+<button class="whatsapp" onclick="whatsappParty()">💬 WhatsApp</button>
+<button class="collect" onclick="collectPayment()">💰 Collect</button>
+<button class="bill" onclick="startBilling()">🧾 Bill</button>
+`;
+
+window.scrollTo({top:0,behavior:"smooth"});
+}
+
+function callParty(){
+alert("Call party feature – link with phone column later");
+}
+
+function whatsappParty(){
+alert("WhatsApp feature – link with phone column later");
+}
+
+function collectPayment(){
+alert("Open collection entry screen");
+}
+
+function startBilling(){
+alert("Open billing screen");
 }
 
 loadData();
