@@ -5,11 +5,9 @@
 <title>AARADHYA TODAY</title>
 
 <link rel="manifest" href="manifest.json">
-
 <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
 
 <style>
-
 body{font-family:Arial;margin:0;background:#f3fbf9;}
 
 .header{
@@ -20,23 +18,10 @@ padding:14px;
 }
 
 .topStats{margin-top:8px;font-size:13px;}
-
-.progressBox{
-background:#ffffff40;
-border-radius:10px;
-height:8px;
-margin:6px 20px;
-}
-
-#progressBar{
-height:8px;
-width:0%;
-border-radius:10px;
-background:red;
-}
+.progressBox{background:#ffffff40;border-radius:10px;height:8px;margin:6px 20px;}
+#progressBar{height:8px;width:0%;border-radius:10px;background:red;}
 
 .container{padding:12px;}
-
 .card{
 background:white;
 padding:14px;
@@ -45,31 +30,18 @@ border-radius:12px;
 box-shadow:0 2px 6px rgba(0,0,0,0.1);
 }
 
-.big{
-font-size:17px;
-font-weight:bold;
-color:#1e8e7e;
-line-height:1.6;
-}
+.big{font-size:17px;font-weight:bold;color:#1e8e7e;line-height:1.6;}
 
 ul{padding-left:18px;margin:0;}
 li{cursor:pointer;margin-bottom:6px;}
 
-button{
-padding:10px;
-border:none;
-border-radius:8px;
-margin:5px 5px 0 0;
-font-weight:bold;
-}
-
+button{padding:10px;border:none;border-radius:8px;margin:5px 5px 0 0;font-weight:bold;}
 .call{background:#2563eb;color:white;}
 .whatsapp{background:#16a34a;color:white;}
 .collect{background:#f59e0b;color:white;}
 .bill{background:#7c3aed;color:white;}
 
 .redText{color:red;font-weight:bold;}
-
 </style>
 </head>
 
@@ -77,40 +49,52 @@ font-weight:bold;
 
 <div class="header">
 <b>AARADHYA TODAY</b>
-
 <div id="tourArea"></div>
 
 <div class="topStats">
 <div id="totalBusiness"></div>
 <div id="totalCollection"></div>
 
-<div class="progressBox">
-<div id="progressBar"></div>
-</div>
-
+<div class="progressBox"><div id="progressBar"></div></div>
 <div id="businessStatus"></div>
 </div>
 </div>
 
 <div class="container">
 
+<!-- PARTY CARD -->
 <div class="card" id="partyCard" style="display:none;border:2px solid #1e8e7e;">
 <b>👤 Party Details</b>
 <div id="partyDetails" class="big"></div>
 <div id="actionButtons"></div>
 </div>
 
+<!-- QUICK STATS -->
+<div class="card">
+<b>📊 Quick Stats – All Areas (MTD)</b>
+<div id="quickStats" class="big"></div>
+</div>
+
+<!-- TOUR PERFORMANCE -->
+<div class="card">
+<b>📍 Today’s Tour Performance (MTD)</b>
+<div id="tourStats" class="big"></div>
+</div>
+
+<!-- TARGET -->
 <div class="card">
 <b>🎯 Today’s Collection Target</b>
 <div id="dailyTarget" class="big"></div>
 </div>
 
+<!-- ROUTE LIST -->
 <div class="card">
 <b>🧭 Today’s Route Parties</b>
 <div id="todayCount" class="big"></div>
 <ul id="todayParties"></ul>
 </div>
 
+<!-- CREDIT LIST -->
 <div class="card">
 <b>⏱ Credit Cycle > 45 Days</b>
 <div id="creditCount" class="big"></div>
@@ -121,11 +105,11 @@ font-weight:bold;
 
 <script>
 
-const sheetURL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQ3bMMFf71-vdGNiWFnf7pD9XuAAUSA7J-g08ocyC2LNiVOTUHi56lB-7bKTKj0KK9nJGs9vU0THQ0E/pub?gid=1044390124&single=true&output=csv";
-const GOOGLE_FORM = "PASTE_YOUR_PREFILL_FORM_LINK";
-const BILLING_URL = "PASTE_YOUR_BILLING_APP_LINK";
+const sheetURL="https://docs.google.com/spreadsheets/d/e/2PACX-1vQ3bMMFf71-vdGNiWFnf7pD9XuAAUSA7J-g08ocyC2LNiVOTUHi56lB-7bKTKj0KK9nJGs9vU0THQ0E/pub?gid=1044390124&single=true&output=csv";
+const GOOGLE_FORM="PASTE_YOUR_PREFILL_FORM_LINK";
+const BILLING_URL="PASTE_YOUR_BILLING_APP_LINK";
 
-const tourPlan = {
+const tourPlan={
 Monday:["Juria"],
 Tuesday:["Ghess"],
 Wednesday:["Gaisilate"],
@@ -140,10 +124,10 @@ return Number(String(val||0).replace(/[^0-9.-]/g,""))||0;
 
 function loadData(){
 
-const today = new Date().toLocaleDateString("en-US",{weekday:"long"});
-const todayAreas = tourPlan[today]||[];
+const today=new Date().toLocaleDateString("en-US",{weekday:"long"});
+const todayAreas=tourPlan[today]||[];
 
-document.getElementById("tourArea").innerText =
+document.getElementById("tourArea").innerText=
 today+" Tour → "+todayAreas.join(", ");
 
 Papa.parse(sheetURL,{
@@ -153,30 +137,44 @@ skipEmptyLines:true,
 
 complete:function(res){
 
-window.sheetData = res.data;
-const data = sheetData;
+window.sheetData=res.data;
+const data=sheetData;
 
-let fyBusiness=0, fyBalance=0;
+let fyBusiness=0,fyBalance=0;
+let totalBusiness=0,totalCollection=0;
+let active=0,inactive=0;
+
+let tourShops=0,tourActive=0,tourInactive=0;
+let tourBusiness=0,tourCollection=0;
 let areaBalance=0;
 
-let todayPartyArr=[];
-let creditArr=[];
+let todayPartyArr=[],creditArr=[];
 
 data.forEach(row=>{
 
-fyBusiness += cleanNumber(row["BUSINESS"]);
-fyBalance += cleanNumber(row["BALANCE"]);
+fyBusiness+=cleanNumber(row["BUSINESS"]);
+fyBalance+=cleanNumber(row["BALANCE"]);
+
+if(row["ACCOUNT STATUS"]==="ACTIVE") active++; else inactive++;
+
+totalBusiness+=cleanNumber(row["BUSINESS CURRENT MONTH"]);
+totalCollection+=cleanNumber(row["Collections Current Month"]);
 
 if(todayAreas.includes(row["AREA"])){
 
+tourShops++;
+
+if(row["ACCOUNT STATUS"]==="ACTIVE") tourActive++; else tourInactive++;
+
+tourBusiness+=cleanNumber(row["BUSINESS CURRENT MONTH"]);
+tourCollection+=cleanNumber(row["Collections Current Month"]);
+
+areaBalance+=cleanNumber(row["BALANCE"]);
+
 todayPartyArr.push({
 name:row["PARTY"],
-balance:cleanNumber(row["BALANCE"]),
-status:row["ACCOUNT STATUS"],
-phone:row[Object.keys(row)[13]]
+balance:cleanNumber(row["BALANCE"])
 });
-
-areaBalance += cleanNumber(row["BALANCE"]);
 
 if(cleanNumber(row["AVG CREDIT CYCLE"])>45){
 creditArr.push({
@@ -189,68 +187,71 @@ credit:row["AVG CREDIT CYCLE"]
 
 });
 
-let totalCollection = fyBusiness - fyBalance;
-let percent = fyBusiness ? (totalCollection/fyBusiness)*100 : 0;
+// HEADER
+let totalCollectionFY=fyBusiness-fyBalance;
+let percent=fyBusiness?(totalCollectionFY/fyBusiness)*100:0;
 
-document.getElementById("totalBusiness").innerHTML =
-`💼 Business: ₹${Math.round(fyBusiness).toLocaleString()}`;
-
-document.getElementById("totalCollection").innerHTML =
-`💰 Collection: ₹${Math.round(totalCollection).toLocaleString()}`;
-
-document.getElementById("businessStatus").innerHTML =
-`Status: ${percent.toFixed(0)}%`;
+document.getElementById("totalBusiness").innerHTML=`💼 Business: ₹${Math.round(fyBusiness).toLocaleString()}`;
+document.getElementById("totalCollection").innerHTML=`💰 Collection: ₹${Math.round(totalCollectionFY).toLocaleString()}`;
+document.getElementById("businessStatus").innerHTML=`Status: ${percent.toFixed(0)}%`;
 
 let bar=document.getElementById("progressBar");
-bar.style.width = percent+"%";
-
+bar.style.width=percent+"%";
 if(percent<40) bar.style.background="red";
 else if(percent<70) bar.style.background="orange";
 else bar.style.background="limegreen";
 
-document.getElementById("dailyTarget").innerText =
+// QUICK STATS
+document.getElementById("quickStats").innerHTML=
+`Total Shops: ${data.length}<br>
+Active: ${active} | Inactive: ${inactive}<br>
+MTD Business: ₹${Math.round(totalBusiness).toLocaleString()}<br>
+MTD Collection: ₹${Math.round(totalCollection).toLocaleString()}`;
+
+// TOUR STATS
+let target=tourBusiness*0.30;
+let achievement=target?(tourCollection/target*100):0;
+
+document.getElementById("tourStats").innerHTML=
+`Total Shops: ${tourShops}<br>
+Active: ${tourActive} | Inactive: ${tourInactive}<br>
+MTD Business: ₹${Math.round(tourBusiness).toLocaleString()}<br>
+MTD Collection: ₹${Math.round(tourCollection).toLocaleString()}<br>
+Target: ₹${Math.round(target).toLocaleString()}<br>
+Achievement: ${achievement.toFixed(0)}%`;
+
+// TARGET
+document.getElementById("dailyTarget").innerText=
 "₹"+Math.round(areaBalance*0.30).toLocaleString();
 
-document.getElementById("todayCount").innerHTML =
-`Total Parties: ${todayPartyArr.length}`;
+// ROUTE LIST
+document.getElementById("todayCount").innerHTML=`Total Parties: ${todayPartyArr.length}`;
+document.getElementById("todayParties").innerHTML=
+todayPartyArr.map(p=>`<li onclick="showParty('${p.name}')">${p.name} – ₹${p.balance.toLocaleString()}</li>`).join("");
 
-document.getElementById("todayParties").innerHTML =
-todayPartyArr.map(p=>
-`<li onclick="showParty('${p.name.replace(/'/g,"")}')">
-${p.name} – ₹${p.balance.toLocaleString()}
-</li>`).join("");
-
-document.getElementById("creditCount").innerHTML =
-`Total Parties: ${creditArr.length}`;
-
-document.getElementById("creditExceeded").innerHTML =
-creditArr.map(c=>
-`<li onclick="showParty('${c.name.replace(/'/g,"")}')">
-${c.name} – ${c.credit} days
-</li>`).join("");
+// CREDIT LIST
+document.getElementById("creditCount").innerHTML=`Total Parties: ${creditArr.length}`;
+document.getElementById("creditExceeded").innerHTML=
+creditArr.map(c=>`<li onclick="showParty('${c.name}')">${c.name} – ${c.credit} days</li>`).join("");
 
 }
-
 });
-
 }
 
 function showParty(name){
 
-let party = sheetData.find(p => p["PARTY"]===name);
+let party=sheetData.find(p=>p["PARTY"]===name);
 
-let phone = party[Object.keys(party)[13]] || "";
-let cleanPhone = phone.toString().replace(/[^0-9]/g,"");
+let phone=party[Object.keys(party)[13]]||"";
+let cleanPhone=phone.toString().replace(/[^0-9]/g,"");
 
-let callLink = `tel:+91${cleanPhone}`;
+let callLink=`tel:+91${cleanPhone}`;
 
-let waMsg =
-`Dear ${name},
+let waMsg=`Dear ${name},
 Kind reminder that your outstanding balance is ₹${cleanNumber(party["BALANCE"]).toLocaleString()}.
 – Aaradhya Pharmaceuticals`;
 
-let waLink =
-`https://wa.me/91${cleanPhone}?text=${encodeURIComponent(waMsg)}`;
+let waLink=`https://wa.me/91${cleanPhone}?text=${encodeURIComponent(waMsg)}`;
 
 document.getElementById("partyCard").style.display="block";
 
@@ -261,56 +262,23 @@ partyCard.style.border="2px solid #1e8e7e";
 }
 
 document.getElementById("partyDetails").innerHTML=`
-
 <b>${name}</b><br><br>
-
 Area: ${party["AREA"]}<br>
-
-Status:
-<span class="${party["ACCOUNT STATUS"]==="BLOCK"?"redText":""}">
-${party["ACCOUNT STATUS"]}
-</span><br>
-
+Status: <span class="${party["ACCOUNT STATUS"]==="BLOCK"?"redText":""}">${party["ACCOUNT STATUS"]}</span><br>
 Balance: ₹${cleanNumber(party["BALANCE"]).toLocaleString()}<br>
-
-Reactivate by Paying:
-₹${cleanNumber(party["Payment needed to Reactivate"]).toLocaleString()}<br>
-
-FY Business:
-₹${cleanNumber(party["BUSINESS"]).toLocaleString()}<br>
-
-MTD Business:
-₹${cleanNumber(party["BUSINESS CURRENT MONTH"]).toLocaleString()}<br>
-
-MTD Collection:
-₹${cleanNumber(party["Collections Current Month"]).toLocaleString()}<br>
-
-Avg Credit Cycle:
-${party["AVG CREDIT CYCLE"]} days<br>
-
-Balance %:
-${party["Balance as % of Business"]}%
-
+Reactivate by Paying: ₹${cleanNumber(party["Payment needed to Reactivate"]).toLocaleString()}<br>
+FY Business: ₹${cleanNumber(party["BUSINESS"]).toLocaleString()}<br>
+MTD Business: ₹${cleanNumber(party["BUSINESS CURRENT MONTH"]).toLocaleString()}<br>
+MTD Collection: ₹${cleanNumber(party["Collections Current Month"]).toLocaleString()}<br>
+Avg Credit Cycle: ${party["AVG CREDIT CYCLE"]} days<br>
+Balance %: ${party["Balance as % of Business"]}%
 `;
 
 document.getElementById("actionButtons").innerHTML=`
-
-<a href="${callLink}">
-<button class="call">📞 Call</button>
-</a>
-
-<a href="${waLink}" target="_blank">
-<button class="whatsapp">💬 WhatsApp</button>
-</a>
-
-<a href="${GOOGLE_FORM}" target="_blank">
-<button class="collect">💰 Collect</button>
-</a>
-
-<a href="${BILLING_URL}" target="_blank">
-<button class="bill">🧾 Bill</button>
-</a>
-
+<a href="${callLink}"><button class="call">📞 Call</button></a>
+<a href="${waLink}" target="_blank"><button class="whatsapp">💬 WhatsApp</button></a>
+<a href="${GOOGLE_FORM}" target="_blank"><button class="collect">💰 Collect</button></a>
+<a href="${BILLING_URL}" target="_blank"><button class="bill">🧾 Bill</button></a>
 `;
 
 window.scrollTo({top:0,behavior:"smooth"});
