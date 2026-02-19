@@ -3,6 +3,7 @@
 <head>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>AARADHYA TODAY</title>
+
 <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
 
 <style>
@@ -35,6 +36,12 @@ li{cursor:pointer;margin-bottom:6px;}
 
 .summaryGrid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-top:8px;}
 .summaryBox{background:#fff1f2;padding:8px;border-radius:8px;font-weight:bold;}
+
+.recoveryItem{
+background:#ecfdf5;
+border-left:5px solid #16a34a;
+padding:8px;border-radius:8px;margin-bottom:8px;font-weight:bold;
+}
 </style>
 </head>
 
@@ -65,6 +72,11 @@ li{cursor:pointer;margin-bottom:6px;}
 <div class="card">
 <b>🚫 Route Reactivation Summary</b>
 <div id="reactivationSummary" class="big"></div>
+</div>
+
+<div class="card">
+<b>🧠 Smart Recovery Plan – Today</b>
+<div id="smartRecovery"></div>
 </div>
 
 <div class="card">
@@ -123,7 +135,6 @@ download:true,header:true,skipEmptyLines:true,
 complete:function(res){
 
 sheetData=res.data;
-
 const columns=Object.keys(sheetData[0]);
 const col=n=>columns.find(c=>normalize(c).includes(n));
 
@@ -141,8 +152,7 @@ let tourBalance=0,tourCollection=0,tourBusiness=0;
 let active=0,inactive=0,tourShops=0,tourActive=0,tourInactive=0;
 
 let blockCount=0,totalReactivate=0,totalRecovered=0,unlockBusiness=0;
-
-let todayList=[],creditList=[];
+let smartList=[],todayList=[],creditList=[];
 
 sheetData.forEach(r=>{
 
@@ -172,16 +182,50 @@ creditList.push({name:r[COL.PARTY],credit:r[COL.CREDIT]});
 }
 
 if(status==="BLOCK"){
+let target=cleanNumber(r[COL.REACTIVATE]);
+let recovered=cleanNumber(r[COL.COLLECTION_MTD]);
+let remaining=target-recovered;
+if(remaining<0)remaining=0;
+
 blockCount++;
-totalReactivate+=cleanNumber(r[COL.REACTIVATE]);
-totalRecovered+=cleanNumber(r[COL.COLLECTION_MTD]);
+totalReactivate+=target;
+totalRecovered+=recovered;
 unlockBusiness+=cleanNumber(r[COL.BUSINESS]);
+
+smartList.push({
+name:r[COL.PARTY],
+remaining,
+unlock:cleanNumber(r[COL.BUSINESS])
+});
 }
 
 }
 
 });
 
+// SMART RECOVERY
+smartList.sort((a,b)=>a.remaining-b.remaining);
+let topRecovery=smartList.slice(0,5);
+
+let totalUnlock=0,totalNeed=0;
+topRecovery.forEach(p=>{
+totalUnlock+=p.unlock;
+totalNeed+=p.remaining;
+});
+
+document.getElementById("smartRecovery").innerHTML=`
+<div style="margin-bottom:8px;font-weight:bold;color:#1e8e7e;">
+Collect ₹${Math.round(totalNeed).toLocaleString()} → Unlock ₹${Math.round(totalUnlock).toLocaleString()}
+</div>
+${topRecovery.map((p,i)=>`
+<div class="recoveryItem">
+${i+1}. ${p.name}<br>
+💰 Pay: ₹${Math.round(p.remaining).toLocaleString()}<br>
+🔓 Unlock: ₹${Math.round(p.unlock).toLocaleString()}
+</div>`).join("")}
+`;
+
+// HEADER
 let totalCollectionFY=fyBusiness-fyBalance;
 let percent=fyBusiness?(totalCollectionFY/fyBusiness)*100:0;
 
@@ -193,21 +237,7 @@ let bar=document.getElementById("progressBar");
 bar.style.width=percent+"%";
 bar.style.background=percent<40?"red":percent<70?"orange":"limegreen";
 
-document.getElementById("quickStats").innerHTML=
-`Total Shops: ${sheetData.length}<br>
-Active: ${active} | Inactive: ${inactive}<br>
-MTD Business: ₹${Math.round(mtdBusiness).toLocaleString()}<br>
-MTD Collection: ₹${Math.round(mtdCollection).toLocaleString()}`;
-
-let target=tourBalance*0.30;
-document.getElementById("dailyTarget").innerText="₹"+Math.round(target).toLocaleString();
-
-document.getElementById("tourStats").innerHTML=
-`Total Shops: ${tourShops}<br>
-Active: ${tourActive} | Inactive: ${tourInactive}<br>
-MTD Business: ₹${Math.round(tourBusiness).toLocaleString()}<br>
-MTD Collection: ₹${Math.round(tourCollection).toLocaleString()}`;
-
+// ROUTE SUMMARY
 let remainingReactivate=totalReactivate-totalRecovered;
 if(remainingReactivate<0)remainingReactivate=0;
 
@@ -222,8 +252,8 @@ Remaining: ₹${Math.round(remainingReactivate).toLocaleString()}
 </div>
 </div>`;
 
+// LISTS
 document.getElementById("todayCount").innerHTML=`Total Parties: ${todayList.length}`;
-
 document.getElementById("todayParties").innerHTML=
 todayList.map(p=>`<li onclick="showParty('${p.name}')">${p.name} – ₹${p.balance.toLocaleString()}</li>`).join("");
 
@@ -243,7 +273,6 @@ const party=sheetData.find(r=>r[COL.PARTY]==name);
 if(!party)return;
 
 const isBlock=(party[COL.STATUS]||"").toUpperCase()==="BLOCK";
-
 const card=document.getElementById("partyCard");
 card.style.display="block";
 card.classList.toggle("blockCard",isBlock);
