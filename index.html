@@ -12,41 +12,28 @@ body{font-family:Arial;margin:0;background:#f3fbf9;}
 .header{background:linear-gradient(90deg,#1e8e7e,#2fa36b);color:white;text-align:center;padding:14px;}
 .container{padding:12px;}
 .card{background:white;padding:14px;margin-bottom:12px;border-radius:12px;box-shadow:0 2px 6px rgba(0,0,0,0.1);}
-.flex{display:flex;gap:10px;}
-.flex .card{flex:1;}
 .big{font-size:20px;font-weight:bold;color:#1e8e7e;}
 ul{padding-left:18px;margin:0;}
-canvas{max-height:260px;}
 </style>
 </head>
 
 <body>
 
-<div class="header"><b>AARADHYA TODAY</b></div>
+<div class="header">
+<b>AARADHYA TODAY</b><br>
+<span id="tourArea"></span>
+</div>
 
 <div class="container">
 
-<!-- TOTAL -->
-<div class="flex">
-<div class="card">Total Business<div id="business" class="big">₹0</div></div>
-<div class="card">Total Collection<div id="collection" class="big">₹0</div></div>
-</div>
+<div class="card"><b>🎯 Today’s Collection Target</b>
+<div id="dailyTarget" class="big"></div></div>
 
-<!-- MONTH -->
-<div class="flex">
-<div class="card">This Month Business<div id="monthBusiness" class="big">₹0</div></div>
-<div class="card">This Month Collection<div id="monthCollection" class="big">₹0</div></div>
-</div>
+<div class="card"><b>🚨 Top 10 High Risk Parties</b>
+<ul id="riskParties"></ul></div>
 
-<div class="card">Pending Bills to Collect<div id="pendingBills" class="big">0</div></div>
-
-<div class="card"><canvas id="chart"></canvas></div>
-
-<div class="card"><b>🚨 Top 10 High Risk Parties</b><ul id="riskParties"></ul></div>
-
-<div class="card"><b>📌 Top 10 Credit Cycle Exceeded</b><ul id="creditExceeded"></ul></div>
-
-<div class="card"><b>🎯 Today’s Collection Target (30% of Balance)</b><div id="dailyTarget" class="big"></div></div>
+<div class="card"><b>📌 Top 10 Credit Cycle Exceeded</b>
+<ul id="creditExceeded"></ul></div>
 
 </div>
 
@@ -54,7 +41,15 @@ canvas{max-height:260px;}
 
 const sheetURL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQ3bMMFf71-vdGNiWFnf7pD9XuAAUSA7J-g08ocyC2LNiVOTUHi56lB-7bKTKj0KK9nJGs9vU0THQ0E/pub?gid=1044390124&single=true&output=csv";
 
-let chart;
+// TOUR PLAN
+const tourPlan = {
+Monday:["Juria"],
+Tuesday:["Ghess"],
+Wednesday:["Gaisilate"],
+Thursday:["Dava"],
+Friday:["Padampur"],
+Saturday:["Paikmal","Mandosil"]
+};
 
 function cleanNumber(val){
 return Number(String(val || 0).replace(/[^0-9.-]/g,"")) || 0;
@@ -66,6 +61,12 @@ return text.toLowerCase().replace(/[^a-z]/g,"");
 
 function loadData(){
 
+const today = new Date().toLocaleDateString("en-US",{weekday:"long"});
+const todayAreas = tourPlan[today] || [];
+
+document.getElementById("tourArea").innerText =
+today + " Tour → " + todayAreas.join(", ");
+
 Papa.parse(sheetURL,{
 download:true,
 header:true,
@@ -75,90 +76,49 @@ complete:function(res){
 
 const data = res.data;
 const columns = Object.keys(data[0]);
-
 const col = name => columns.find(c => normalize(c).includes(name));
 
-// MAIN COLUMNS
-const BUSINESS = col("business");
+const AREA = col("area");
+const PARTY = col("party");
 const BALANCE = col("balance");
-const PENDING = col("pendingbills");
 const RISK = col("balanceasofbusiness");
 const CREDIT = col("avgcreditcycle");
-const PARTY = col("party");
 
-// MONTHLY (K & M)
-const MONTH_BUSINESS = columns[10];
-const MONTH_COLLECTION = columns[12];
-
-let totalBusiness=0,totalBalance=0,totalPending=0;
-let monthBusiness=0,monthCollection=0;
+let areaBalance = 0;
 
 let riskArr=[],creditArr=[];
 
 data.forEach(row=>{
 
-let business = cleanNumber(row[BUSINESS]);
+let partyArea = row[AREA];
+
+if(!todayAreas.includes(partyArea)) return;
+
 let balance = cleanNumber(row[BALANCE]);
-let pending = cleanNumber(row[PENDING]);
-
-let mBusiness = cleanNumber(row[MONTH_BUSINESS]);
-let mCollection = cleanNumber(row[MONTH_COLLECTION]);
-
 let risk = cleanNumber(row[RISK]);
 let credit = cleanNumber(row[CREDIT]);
 
-totalBusiness += business;
-totalBalance += balance;
-totalPending += pending;
-
-monthBusiness += mBusiness;
-monthCollection += mCollection;
+areaBalance += balance;
 
 if(risk>0) riskArr.push({party:row[PARTY],balance,risk});
 if(credit>45) creditArr.push({party:row[PARTY],credit});
 
 });
 
-let totalCollection = totalBusiness - totalBalance;
+// TARGET → 30% OF AREA BALANCE
+let target = areaBalance * 0.30;
+document.getElementById("dailyTarget").innerText =
+"₹" + Math.round(target).toLocaleString();
 
-// KPI DISPLAY
-document.getElementById("business").innerText="₹"+totalBusiness.toLocaleString();
-document.getElementById("collection").innerText="₹"+totalCollection.toLocaleString();
-document.getElementById("pendingBills").innerText=totalPending.toLocaleString();
-document.getElementById("monthBusiness").innerText="₹"+monthBusiness.toLocaleString();
-document.getElementById("monthCollection").innerText="₹"+monthCollection.toLocaleString();
-
-// SORT & LIMIT
+// SORT & TOP 10
 riskArr.sort((a,b)=>b.risk-a.risk);
 creditArr.sort((a,b)=>b.credit-a.credit);
 
-const topRisk = riskArr.slice(0,10);
-const topCredit = creditArr.slice(0,10);
-
-// DISPLAY
 document.getElementById("riskParties").innerHTML =
-topRisk.map(r=>`<li>${r.party} – ₹${r.balance.toLocaleString()} – ${r.risk}%</li>`).join("");
+riskArr.slice(0,10).map(r=>`<li>${r.party} – ₹${r.balance.toLocaleString()} – ${r.risk}%</li>`).join("");
 
 document.getElementById("creditExceeded").innerHTML =
-topCredit.map(c=>`<li>${c.party} – ${c.credit} days</li>`).join("");
-
-// TARGET = 30% BALANCE
-let target = totalBalance * 0.30;
-document.getElementById("dailyTarget").innerText="₹"+Math.round(target).toLocaleString();
-
-// CHART SAFE RELOAD
-if(chart) chart.destroy();
-
-chart = new Chart(document.getElementById("chart"),{
-type:'doughnut',
-data:{
-labels:["Total Business","Total Collection"],
-datasets:[{
-data:[totalBusiness,totalCollection],
-backgroundColor:["#2fa36b","#1e8e7e"]
-}]
-}
-});
+creditArr.slice(0,10).map(c=>`<li>${c.party} – ${c.credit} days</li>`).join("");
 
 }
 
