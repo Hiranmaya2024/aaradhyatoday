@@ -4,7 +4,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>AARADHYA TODAY</title>
 
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<link rel="manifest" href="manifest.json">
+
 <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
 
 <style>
@@ -12,7 +13,7 @@ body{font-family:Arial;margin:0;background:#f3fbf9;}
 .header{background:linear-gradient(90deg,#1e8e7e,#2fa36b);color:white;text-align:center;padding:14px;}
 .container{padding:12px;}
 .card{background:white;padding:14px;margin-bottom:12px;border-radius:12px;box-shadow:0 2px 6px rgba(0,0,0,0.1);}
-.big{font-size:20px;font-weight:bold;color:#1e8e7e;}
+.big{font-size:18px;font-weight:bold;color:#1e8e7e;line-height:1.6;}
 ul{padding-left:18px;margin:0;}
 </style>
 </head>
@@ -26,20 +27,36 @@ ul{padding-left:18px;margin:0;}
 
 <div class="container">
 
-<div class="card"><b>🎯 Today’s Collection Target</b>
-<div id="dailyTarget" class="big"></div></div>
+<div class="card">
+<b>📊 Quick Stats – All Areas (MTD)</b>
+<div id="quickStats" class="big"></div>
+</div>
 
-<div class="card"><b>🚨 Top 10 High Risk Parties</b>
-<ul id="riskParties"></ul></div>
+<div class="card">
+<b>📍 Today’s Tour Performance (MTD)</b>
+<div id="tourStats" class="big"></div>
+</div>
 
-<div class="card"><b>📌 Top 10 Credit Cycle Exceeded</b>
-<ul id="creditExceeded"></ul></div>
+<div class="card">
+<b>🎯 Today’s Collection Target</b>
+<div id="dailyTarget" class="big"></div>
+</div>
+
+<div class="card">
+<b>🚨 Top 10 High Risk Parties</b>
+<ul id="riskParties"></ul>
+</div>
+
+<div class="card">
+<b>📌 Top 10 Credit Cycle Exceeded</b>
+<ul id="creditExceeded"></ul>
+</div>
 
 </div>
 
 <script>
 
-const sheetURL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQ3bMMFf71-vdGNiWFnf7pD9XuAAUSA7J-g08ocyC2LNiVOTUHi56lB-7bKTKj0KK9nJGs9vU0THQ0E/pub?gid=1044390124&single=true&output=csv";
+const sheetURL = "YOUR_GOOGLE_SHEET_CSV_LINK";
 
 // TOUR PLAN
 const tourPlan = {
@@ -80,19 +97,49 @@ const col = name => columns.find(c => normalize(c).includes(name));
 
 const AREA = col("area");
 const PARTY = col("party");
+const STATUS = col("accountstatus");
 const BALANCE = col("balance");
+const BUSINESS_MTD = col("businesscurrentmonth");
+const COLLECTION_MTD = col("collectionscurrentmonth");
 const RISK = col("balanceasofbusiness");
 const CREDIT = col("avgcreditcycle");
 
+// 🔷 OVERALL
+let totalShops = data.length;
+let active = 0, inactive = 0;
+let totalBusiness = 0, totalCollection = 0;
+
+// 🔷 TOUR
+let tourShops = 0, tourActive = 0, tourInactive = 0;
+let tourBusiness = 0, tourCollection = 0;
 let areaBalance = 0;
 
 let riskArr=[],creditArr=[];
 
 data.forEach(row=>{
 
+let status = (row[STATUS] || "").toUpperCase();
+
+if(status === "ACTIVE") active++;
+else inactive++;
+
+let b = cleanNumber(row[BUSINESS_MTD]);
+let c = cleanNumber(row[COLLECTION_MTD]);
+
+totalBusiness += b;
+totalCollection += c;
+
 let partyArea = row[AREA];
 
-if(!todayAreas.includes(partyArea)) return;
+if(todayAreas.includes(partyArea)){
+
+tourShops++;
+
+if(status === "ACTIVE") tourActive++;
+else tourInactive++;
+
+tourBusiness += b;
+tourCollection += c;
 
 let balance = cleanNumber(row[BALANCE]);
 let risk = cleanNumber(row[RISK]);
@@ -102,15 +149,35 @@ areaBalance += balance;
 
 if(risk>0) riskArr.push({party:row[PARTY],balance,risk});
 if(credit>45) creditArr.push({party:row[PARTY],credit});
+}
 
 });
 
-// TARGET → 30% OF AREA BALANCE
-let target = areaBalance * 0.30;
-document.getElementById("dailyTarget").innerText =
-"₹" + Math.round(target).toLocaleString();
+// 🔷 QUICK STATS
+document.getElementById("quickStats").innerHTML =
+`Total Shops: ${totalShops}<br>
+Active: ${active} | Inactive: ${inactive}<br>
+MTD Business: ₹${Math.round(totalBusiness).toLocaleString()}<br>
+MTD Collection: ₹${Math.round(totalCollection).toLocaleString()}`;
 
-// SORT & TOP 10
+// 🔷 TOUR STATS
+let target = tourBusiness * 0.30;
+let achievement = target ? (tourCollection/target*100) : 0;
+
+document.getElementById("tourStats").innerHTML =
+`Total Shops: ${tourShops}<br>
+Active: ${tourActive} | Inactive: ${tourInactive}<br>
+MTD Business: ₹${Math.round(tourBusiness).toLocaleString()}<br>
+MTD Collection: ₹${Math.round(tourCollection).toLocaleString()}<br>
+Target: ₹${Math.round(target).toLocaleString()}<br>
+Achievement: ${achievement.toFixed(0)}%`;
+
+// 🔷 TARGET FROM BALANCE
+let dailyTarget = areaBalance * 0.30;
+document.getElementById("dailyTarget").innerText =
+"₹" + Math.round(dailyTarget).toLocaleString();
+
+// 🔷 TOP 10
 riskArr.sort((a,b)=>b.risk-a.risk);
 creditArr.sort((a,b)=>b.credit-a.credit);
 
