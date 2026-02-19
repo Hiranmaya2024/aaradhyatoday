@@ -1,5 +1,3 @@
-
-
 <!DOCTYPE html>
 <html>
 <head>
@@ -18,8 +16,10 @@ background:linear-gradient(90deg,#1e8e7e,#2fa36b);
 color:white;text-align:center;padding:12px;
 }
 
-.progressBox{background:#ffffff40;border-radius:10px;height:8px;margin:6px auto;max-width:500px;}
-#progressBar{height:8px;width:0%;border-radius:10px;background:red;}
+button.refresh{
+margin-top:6px;padding:6px 12px;border:none;border-radius:6px;
+font-weight:bold;cursor:pointer;
+}
 
 .container{padding:12px;max-width:1400px;margin:auto;}
 .dashboard-grid{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));}
@@ -29,16 +29,6 @@ color:white;text-align:center;padding:12px;
 
 ul{padding-left:18px;margin:0;max-height:260px;overflow:auto;}
 li{cursor:pointer;margin-bottom:6px;}
-
-button{padding:12px;border:none;border-radius:10px;font-weight:bold;min-width:110px;}
-.action-grid{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;}
-
-.call{background:#2563eb;color:white;}
-.whatsapp{background:#16a34a;color:white;}
-.collect{background:#f59e0b;color:white;}
-.bill{background:#7c3aed;color:white;}
-
-.redText{color:red;font-weight:bold;}
 
 .blockCard{border:2px solid #dc2626 !important;background:#fff1f2 !important;}
 .blockHeader{color:#dc2626;font-weight:bold;}
@@ -64,10 +54,9 @@ margin:10px 0;text-align:center;font-weight:bold;
 <div class="header">
 <b>AARADHYA TODAY</b>
 <div id="tourArea"></div>
-<div id="totalBusiness"></div>
-<div id="totalCollection"></div>
-<div class="progressBox"><div id="progressBar"></div></div>
-<div id="businessStatus"></div>
+
+<button class="refresh" onclick="loadData()">🔄 Refresh</button>
+<div id="lastUpdated" style="font-size:12px;margin-top:4px;"></div>
 </div>
 
 <div class="container">
@@ -76,39 +65,11 @@ margin:10px 0;text-align:center;font-weight:bold;
 <div class="card" id="partyCard" style="display:none;border:2px solid #1e8e7e;">
 <b>👤 Party Details</b>
 <div id="partyDetails" class="big"></div>
-<div id="actionButtons" class="action-grid"></div>
-</div>
-
-<div class="card">
-<b>🚫 Route Reactivation Summary</b>
-<div id="reactivationSummary" class="big"></div>
-</div>
-
-<div class="card">
-<b>📊 Quick Stats – All Areas (MTD)</b>
-<div id="quickStats" class="big"></div>
-</div>
-
-<div class="card">
-<b>📍 Today’s Tour Performance (MTD)</b>
-<div id="tourStats" class="big"></div>
-</div>
-
-<div class="card">
-<b>🎯 Today’s Collection Target</b>
-<div id="dailyTarget" class="big"></div>
 </div>
 
 <div class="card">
 <b>🧭 Today’s Route Parties</b>
-<div id="todayCount" class="big"></div>
 <ul id="todayParties"></ul>
-</div>
-
-<div class="card">
-<b>⏱ Credit Cycle > 45 Days</b>
-<div id="creditCount" class="big"></div>
-<ul id="creditExceeded"></ul>
 </div>
 
 </div>
@@ -117,29 +78,20 @@ margin:10px 0;text-align:center;font-weight:bold;
 <script>
 
 const sheetURL="https://docs.google.com/spreadsheets/d/e/2PACX-1vQ3bMMFf71-vdGNiWFnf7pD9XuAAUSA7J-g08ocyC2LNiVOTUHi56lB-7bKTKj0KK9nJGs9vU0THQ0E/pub?gid=1044390124&single=true&output=csv";
-const GOOGLE_FORM="PASTE_YOUR_PREFILL_FORM_LINK";
-const BILLING_URL="PASTE_YOUR_BILLING_APP_LINK";
 
-let COL = {};
-let sheetData = [];
-
-const tourPlan={
-Monday:["Juria"],Tuesday:["Ghess"],Wednesday:["Gaisilate"],
-Thursday:["Jharbandh"],Friday:["Padampur"],Saturday:["Paikmal","Mandosil"]
-};
+let COL={},sheetData=[];
 
 function cleanNumber(val){return Number(String(val||0).replace(/[^0-9.-]/g,""))||0;}
 function normalize(text){return text.toLowerCase().replace(/[^a-z]/g,"");}
 
 function loadData(){
 
-const today=new Date().toLocaleDateString("en-US",{weekday:"long"});
-const todayAreas=tourPlan[today]||[];
-document.getElementById("tourArea").innerText=today+" Tour → "+todayAreas.join(", ");
-
-Papa.parse(sheetURL,{download:true,header:true,skipEmptyLines:true,
+Papa.parse(sheetURL+"&t="+new Date().getTime(),{
+download:true,header:true,skipEmptyLines:true,
 
 complete:function(res){
+
+if(!res.data.length) return;
 
 sheetData=res.data;
 
@@ -154,27 +106,26 @@ BUSINESS:col("business"),
 BALANCE:col("balance"),
 BUSINESS_MTD:col("businesscurrentmonth"),
 COLLECTION_MTD:col("collectionscurrentmonth"),
-CREDIT:col("avgcreditcycle"),
 REACTIVATE:col("paymentneededtoreactivate")
 };
 
-let fyBusiness=0,fyBalance=0;
+let todayList=[];
 
 sheetData.forEach(row=>{
-fyBusiness+=cleanNumber(row[COL.BUSINESS]);
-fyBalance+=cleanNumber(row[COL.BALANCE]);
+todayList.push({
+name:row[COL.PARTY],
+balance:cleanNumber(row[COL.BALANCE])
+});
 });
 
-let totalCollectionFY=fyBusiness-fyBalance;
-let percent=fyBusiness?(totalCollectionFY/fyBusiness)*100:0;
+document.getElementById("todayParties").innerHTML=
+todayList.map(p=>`
+<li data-name="${p.name}" onclick="showParty(this.dataset.name)">
+${p.name} – ₹${p.balance.toLocaleString()}
+</li>`).join("");
 
-document.getElementById("totalBusiness").innerHTML=`💼 Business: ₹${Math.round(fyBusiness).toLocaleString()}`;
-document.getElementById("totalCollection").innerHTML=`💰 Collection: ₹${Math.round(totalCollectionFY).toLocaleString()}`;
-document.getElementById("businessStatus").innerHTML=`Status: ${percent.toFixed(0)}%`;
-
-let bar=document.getElementById("progressBar");
-bar.style.width=percent+"%";
-bar.style.background=percent<40?"red":percent<70?"orange":"limegreen";
+document.getElementById("lastUpdated").innerText=
+"Last updated: "+new Date().toLocaleTimeString();
 
 }});
 
@@ -182,7 +133,7 @@ bar.style.background=percent<40?"red":percent<70?"orange":"limegreen";
 
 function showParty(name){
 
-const party = sheetData.find(row => row[COL.PARTY] == name);
+const party=sheetData.find(r=>r[COL.PARTY]==name);
 if(!party) return;
 
 const isBlock=(party[COL.STATUS]||"").toUpperCase()==="BLOCK";
@@ -197,52 +148,36 @@ let remaining=target-recovered;
 if(remaining<0)remaining=0;
 
 let progress=target?(recovered/target)*100:0;
-
 let unlockBusiness=cleanNumber(party[COL.BUSINESS]);
-
-let unlockBox=isBlock?`
-<div class="unlockBox">
-🔓 Unlock Billing Potential: ₹${unlockBusiness.toLocaleString()}
-</div>`:"";
-
-let payBox=isBlock?`
-<div class="payBox">
-💰 Pay ₹${remaining.toLocaleString()} to Unblock
-</div>`:"";
-
-let reactivateBox=isBlock?`
-<div class="reactivationBox">
-Target: ₹${target.toLocaleString()}<br>
-Recovered: ₹${recovered.toLocaleString()}
-<div class="reactivationBarBg">
-<div class="reactivationBar" style="width:${progress}%"></div>
-</div>
-<div style="margin-top:6px;font-weight:bold;color:#dc2626;">
-${progress.toFixed(0)}% completed
-</div>
-</div>`:"";
 
 document.getElementById("partyDetails").innerHTML=`
 
 <b class="${isBlock?'blockHeader':''}" style="font-size:18px">${name}</b><br><br>
 
 Area: ${party[COL.AREA]}<br>
-Status: <span class="${isBlock?'redText':''}">${party[COL.STATUS]}</span><br>
+Status: ${party[COL.STATUS]}<br>
 
-${unlockBox}
-${payBox}
+${isBlock?`<div class="unlockBox">🔓 Unlock Billing Potential: ₹${unlockBusiness.toLocaleString()}</div>`:""}
+
+${isBlock?`<div class="payBox">💰 Pay ₹${remaining.toLocaleString()} to Unblock</div>`:""}
 
 Balance: ₹${cleanNumber(party[COL.BALANCE]).toLocaleString()}<br>
-FY Business: ₹${unlockBusiness.toLocaleString()}<br>
-MTD Business: ₹${cleanNumber(party[COL.BUSINESS_MTD]).toLocaleString()}<br>
 MTD Collection: ₹${recovered.toLocaleString()}
 
-${reactivateBox}
+${isBlock?`
+<div class="reactivationBox">
+Progress
+<div class="reactivationBarBg">
+<div class="reactivationBar" style="width:${progress}%"></div>
+</div>
+${progress.toFixed(0)}%
+</div>`:""}
 `;
 
 }
 
 loadData();
+setInterval(loadData,120000);
 
 </script>
 
