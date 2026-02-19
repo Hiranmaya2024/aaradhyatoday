@@ -1,17 +1,14 @@
 
 
-
 <!DOCTYPE html>
 <html>
 <head>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>AARADHYA TODAY</title>
 
-<link rel="manifest" href="manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
 
 <style>
-
 *{box-sizing:border-box}
 body{font-family:Arial;margin:0;background:#f3fbf9;}
 
@@ -25,11 +22,7 @@ color:white;text-align:center;padding:12px;
 #progressBar{height:8px;width:0%;border-radius:10px;background:red;}
 
 .container{padding:12px;max-width:1400px;margin:auto;}
-
-.dashboard-grid{
-display:grid;gap:12px;
-grid-template-columns:repeat(auto-fit,minmax(280px,1fr));
-}
+.dashboard-grid{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));}
 
 .card{background:white;padding:14px;border-radius:14px;box-shadow:0 2px 8px rgba(0,0,0,0.08);}
 .big{font-size:16px;font-weight:bold;color:#1e8e7e;line-height:1.6;}
@@ -47,13 +40,22 @@ button{padding:12px;border:none;border-radius:10px;font-weight:bold;min-width:11
 
 .redText{color:red;font-weight:bold;}
 
-.summaryGrid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-top:8px;}
-.summaryBox{background:#fff1f2;padding:8px;border-radius:8px;font-weight:bold;}
+.blockCard{border:2px solid #dc2626 !important;background:#fff1f2 !important;}
+.blockHeader{color:#dc2626;font-weight:bold;}
+
+.payBox{
+background:#dc2626;color:white;padding:12px;border-radius:12px;
+margin:12px 0;text-align:center;font-size:18px;font-weight:bold;
+}
+
+.unlockBox{
+background:#16a34a;color:white;padding:10px;border-radius:10px;
+margin:10px 0;text-align:center;font-weight:bold;
+}
 
 .reactivationBox{background:#fff;border:2px solid #dc2626;padding:12px;border-radius:12px;margin:12px 0;}
 .reactivationBarBg{background:#ffe4e6;height:10px;border-radius:10px;margin-top:6px;}
 .reactivationBar{height:10px;border-radius:10px;background:#dc2626;}
-
 </style>
 </head>
 
@@ -133,9 +135,7 @@ function loadData(){
 
 const today=new Date().toLocaleDateString("en-US",{weekday:"long"});
 const todayAreas=tourPlan[today]||[];
-
-document.getElementById("tourArea").innerText=
-today+" Tour → "+todayAreas.join(", ");
+document.getElementById("tourArea").innerText=today+" Tour → "+todayAreas.join(", ");
 
 Papa.parse(sheetURL,{download:true,header:true,skipEmptyLines:true,
 
@@ -158,57 +158,13 @@ CREDIT:col("avgcreditcycle"),
 REACTIVATE:col("paymentneededtoreactivate")
 };
 
-let fyBusiness=0,fyBalance=0,mtdBusiness=0,mtdCollection=0;
-let active=0,inactive=0;
-
-let tourShops=0,tourActive=0,tourInactive=0;
-let tourBusiness=0,tourCollection=0,tourBalance=0;
-
-let blockCount=0,totalReactivate=0,totalRecovered=0,unlockBusiness=0;
-
-let todayPartyArr=[],creditArr=[];
+let fyBusiness=0,fyBalance=0;
 
 sheetData.forEach(row=>{
-
-let status=(row[COL.STATUS]||"").toUpperCase();
-
 fyBusiness+=cleanNumber(row[COL.BUSINESS]);
 fyBalance+=cleanNumber(row[COL.BALANCE]);
-mtdBusiness+=cleanNumber(row[COL.BUSINESS_MTD]);
-mtdCollection+=cleanNumber(row[COL.COLLECTION_MTD]);
-
-if(status==="ACTIVE") active++; else inactive++;
-
-if(todayAreas.includes(row[COL.AREA])){
-
-tourShops++;
-if(status==="ACTIVE") tourActive++; else tourInactive++;
-
-tourBusiness+=cleanNumber(row[COL.BUSINESS_MTD]);
-tourCollection+=cleanNumber(row[COL.COLLECTION_MTD]);
-tourBalance+=cleanNumber(row[COL.BALANCE]);
-
-todayPartyArr.push({name:row[COL.PARTY],balance:cleanNumber(row[COL.BALANCE])});
-
-if(cleanNumber(row[COL.CREDIT])>45){
-creditArr.push({name:row[COL.PARTY],credit:row[COL.CREDIT]});
-}
-
-if(status==="BLOCK"){
-blockCount++;
-let reactAmt=cleanNumber(row[COL.REACTIVATE]);
-let recAmt=cleanNumber(row[COL.COLLECTION_MTD]);
-
-totalReactivate+=reactAmt;
-totalRecovered+=recAmt;
-unlockBusiness+=cleanNumber(row[COL.BUSINESS]);
-}
-
-}
-
 });
 
-// HEADER
 let totalCollectionFY=fyBusiness-fyBalance;
 let percent=fyBusiness?(totalCollectionFY/fyBusiness)*100:0;
 
@@ -220,59 +176,6 @@ let bar=document.getElementById("progressBar");
 bar.style.width=percent+"%";
 bar.style.background=percent<40?"red":percent<70?"orange":"limegreen";
 
-// QUICK STATS
-document.getElementById("quickStats").innerHTML=
-`Total Shops: ${sheetData.length}<br>
-Active: ${active} | Inactive: ${inactive}<br>
-MTD Business: ₹${Math.round(mtdBusiness).toLocaleString()}<br>
-MTD Collection: ₹${Math.round(mtdCollection).toLocaleString()}`;
-
-// TOUR
-let target=tourBalance*0.30;
-let achievement=target?(tourCollection/target*100):0;
-
-document.getElementById("tourStats").innerHTML=
-`Total Shops: ${tourShops}<br>
-Active: ${tourActive} | Inactive: ${tourInactive}<br>
-MTD Business: ₹${Math.round(tourBusiness).toLocaleString()}<br>
-MTD Collection: ₹${Math.round(tourCollection).toLocaleString()}<br>
-Target: ₹${Math.round(target).toLocaleString()}<br>
-Achievement: ${achievement.toFixed(0)}%`;
-
-document.getElementById("dailyTarget").innerText="₹"+Math.round(target).toLocaleString();
-
-// REACTIVATION SUMMARY
-let remainingReactivate=totalReactivate-totalRecovered;
-if(remainingReactivate<0)remainingReactivate=0;
-
-document.getElementById("reactivationSummary").innerHTML=`
-<div class="summaryGrid">
-<div class="summaryBox">Blocked: ${blockCount}</div>
-<div class="summaryBox">Unlock Business: ₹${Math.round(unlockBusiness).toLocaleString()}</div>
-<div class="summaryBox">Target: ₹${Math.round(totalReactivate).toLocaleString()}</div>
-<div class="summaryBox">Recovered: ₹${Math.round(totalRecovered).toLocaleString()}</div>
-<div class="summaryBox" style="grid-column:1/3;background:#dc2626;color:white;">
-Remaining: ₹${Math.round(remainingReactivate).toLocaleString()}
-</div>
-</div>`;
-
-// LISTS
-document.getElementById("todayCount").innerHTML=`Total Parties: ${todayPartyArr.length}`;
-
-document.getElementById("todayParties").innerHTML=
-todayPartyArr.map(p=>`
-<li data-name="${p.name}" onclick="showParty(this.dataset.name)">
-${p.name} – ₹${p.balance.toLocaleString()}
-</li>`).join("");
-
-document.getElementById("creditCount").innerHTML=`Total Parties: ${creditArr.length}`;
-
-document.getElementById("creditExceeded").innerHTML=
-creditArr.map(c=>`
-<li data-name="${c.name}" onclick="showParty(this.dataset.name)">
-${c.name} – ${c.credit} days
-</li>`).join("");
-
 }});
 
 }
@@ -282,82 +185,64 @@ function showParty(name){
 const party = sheetData.find(row => row[COL.PARTY] == name);
 if(!party) return;
 
-let phone = party[Object.keys(party)[13]] || "";
-let cleanPhone = phone.toString().replace(/[^0-9]/g,"");
-
-let callLink = `tel:+91${cleanPhone}`;
-
-let waMsg =
-`Dear ${name},
-Kind reminder that your outstanding balance is ₹${cleanNumber(party[COL.BALANCE]).toLocaleString()}.
-– Aaradhya Pharmaceuticals`;
-
-let waLink =
-`https://wa.me/91${cleanPhone}?text=${encodeURIComponent(waMsg)}`;
-
 const isBlock=(party[COL.STATUS]||"").toUpperCase()==="BLOCK";
 
 const card=document.getElementById("partyCard");
 card.style.display="block";
-
-card.style.border=isBlock?"2px solid #dc2626":"2px solid #1e8e7e";
-card.style.background=isBlock?"#fff1f2":"white";
-
-let reactivateBox="";
-let progress=0;
-
-if(isBlock){
+card.classList.toggle("blockCard",isBlock);
 
 let target=cleanNumber(party[COL.REACTIVATE]);
 let recovered=cleanNumber(party[COL.COLLECTION_MTD]);
-
-progress=target?(recovered/target)*100:0;
 let remaining=target-recovered;
 if(remaining<0)remaining=0;
 
-reactivateBox=`
-<div class="reactivationBox">
-<b style="color:#dc2626;">🚫 BLOCKED – REACTIVATION TRACKER</b><br><br>
-Target: ₹${target.toLocaleString()}<br>
-Recovered: ₹${recovered.toLocaleString()}<br>
-Remaining: ₹${remaining.toLocaleString()}<br>
+let progress=target?(recovered/target)*100:0;
 
+let unlockBusiness=cleanNumber(party[COL.BUSINESS]);
+
+let unlockBox=isBlock?`
+<div class="unlockBox">
+🔓 Unlock Billing Potential: ₹${unlockBusiness.toLocaleString()}
+</div>`:"";
+
+let payBox=isBlock?`
+<div class="payBox">
+💰 Pay ₹${remaining.toLocaleString()} to Unblock
+</div>`:"";
+
+let reactivateBox=isBlock?`
+<div class="reactivationBox">
+Target: ₹${target.toLocaleString()}<br>
+Recovered: ₹${recovered.toLocaleString()}
 <div class="reactivationBarBg">
 <div class="reactivationBar" style="width:${progress}%"></div>
 </div>
-
 <div style="margin-top:6px;font-weight:bold;color:#dc2626;">
 ${progress.toFixed(0)}% completed
 </div>
-</div>`;
-}
+</div>`:"";
 
 document.getElementById("partyDetails").innerHTML=`
-<b style="font-size:18px">${name}</b><br><br>
+
+<b class="${isBlock?'blockHeader':''}" style="font-size:18px">${name}</b><br><br>
+
 Area: ${party[COL.AREA]}<br>
-Status: <span class="${isBlock?"redText":""}">${party[COL.STATUS]}</span><br>
+Status: <span class="${isBlock?'redText':''}">${party[COL.STATUS]}</span><br>
+
+${unlockBox}
+${payBox}
+
 Balance: ₹${cleanNumber(party[COL.BALANCE]).toLocaleString()}<br>
-${reactivateBox}
-FY Business: ₹${cleanNumber(party[COL.BUSINESS]).toLocaleString()}<br>
+FY Business: ₹${unlockBusiness.toLocaleString()}<br>
 MTD Business: ₹${cleanNumber(party[COL.BUSINESS_MTD]).toLocaleString()}<br>
-MTD Collection: ₹${cleanNumber(party[COL.COLLECTION_MTD]).toLocaleString()}
+MTD Collection: ₹${recovered.toLocaleString()}
+
+${reactivateBox}
 `;
 
-let billButton=`<a href="${BILLING_URL}" target="_blank"><button class="bill">🧾 Bill</button></a>`;
-if(isBlock && progress<100) billButton="";
-
-document.getElementById("actionButtons").innerHTML=`
-<a href="${callLink}"><button class="call">📞 Call</button></a>
-<a href="${waLink}" target="_blank"><button class="whatsapp">💬 WhatsApp</button></a>
-<a href="${GOOGLE_FORM}" target="_blank"><button class="collect">💰 Collect</button></a>
-${billButton}
-`;
-
-window.scrollTo({top:0,behavior:"smooth"});
 }
 
 loadData();
-setInterval(loadData,300000);
 
 </script>
 
