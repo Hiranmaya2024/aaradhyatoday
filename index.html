@@ -1,206 +1,6 @@
-<!DOCTYPE html>
-<html>
-<head>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AARADHYA TODAY</title>
-
-<link rel="manifest" href="manifest.json">
-<script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
-
-<style>
-
-*{box-sizing:border-box}
-
-body{
-font-family:Arial, sans-serif;
-margin:0;
-background:#f3fbf9;
-}
-
-/* HEADER */
-.header{
-position:sticky;
-top:0;
-z-index:1000;
-background:linear-gradient(90deg,#1e8e7e,#2fa36b);
-color:white;
-text-align:center;
-padding:12px 10px;
-}
-
-.topStats{
-margin-top:6px;
-font-size:13px;
-}
-
-.progressBox{
-background:#ffffff40;
-border-radius:10px;
-height:8px;
-margin:6px auto;
-max-width:500px;
-}
-
-#progressBar{
-height:8px;
-width:0%;
-border-radius:10px;
-background:red;
-}
-
-/* MAIN CONTAINER */
-.container{
-padding:12px;
-max-width:1400px;
-margin:auto;
-}
-
-/* GRID SYSTEM */
-.dashboard-grid{
-display:grid;
-gap:12px;
-grid-template-columns:repeat(auto-fit,minmax(280px,1fr));
-}
-
-/* CARD */
-.card{
-background:white;
-padding:14px;
-border-radius:14px;
-box-shadow:0 2px 8px rgba(0,0,0,0.08);
-width:100%;
-}
-
-.big{
-font-size:clamp(15px,2vw,18px);
-font-weight:bold;
-color:#1e8e7e;
-line-height:1.6;
-}
-
-ul{
-padding-left:18px;
-margin:0;
-max-height:260px;
-overflow:auto;
-}
-
-li{
-cursor:pointer;
-margin-bottom:6px;
-font-size:14px;
-}
-
-/* PARTY CARD */
-#partyCard{
-position:sticky;
-top:80px;
-}
-
-/* BUTTONS */
-button{
-padding:12px;
-border:none;
-border-radius:10px;
-font-weight:bold;
-font-size:14px;
-min-width:110px;
-}
-
-.action-grid{
-display:flex;
-flex-wrap:wrap;
-gap:8px;
-margin-top:10px;
-}
-
-.call{background:#2563eb;color:white;}
-.whatsapp{background:#16a34a;color:white;}
-.collect{background:#f59e0b;color:white;}
-.bill{background:#7c3aed;color:white;}
-
-.redText{color:red;font-weight:bold}
-
-/* MOBILE */
-@media (max-width:480px){
-button{flex:1 1 45%;}
-ul{max-height:220px;}
-}
-
-/* LARGE DESKTOP */
-@media (min-width:1200px){
-.dashboard-grid{
-grid-template-columns:repeat(3,1fr);
-}
-}
-
-</style>
-</head>
-
-<body>
-
-<div class="header">
-<b>AARADHYA TODAY</b>
-<div id="tourArea"></div>
-
-<div class="topStats">
-<div id="totalBusiness"></div>
-<div id="totalCollection"></div>
-<div class="progressBox"><div id="progressBar"></div></div>
-<div id="businessStatus"></div>
-</div>
-</div>
-
-<div class="container">
-<div class="dashboard-grid">
-
-<!-- PARTY CARD -->
-<div class="card" id="partyCard" style="display:none;border:2px solid #1e8e7e;">
-<b>👤 Party Details</b>
-<div id="partyDetails" class="big"></div>
-<div id="actionButtons" class="action-grid"></div>
-</div>
-
-<!-- QUICK STATS -->
-<div class="card">
-<b>📊 Quick Stats – All Areas (MTD)</b>
-<div id="quickStats" class="big"></div>
-</div>
-
-<!-- TOUR PERFORMANCE -->
-<div class="card">
-<b>📍 Today’s Tour Performance (MTD)</b>
-<div id="tourStats" class="big"></div>
-</div>
-
-<!-- TARGET -->
-<div class="card">
-<b>🎯 Today’s Collection Target</b>
-<div id="dailyTarget" class="big"></div>
-</div>
-
-<!-- ROUTE LIST -->
-<div class="card">
-<b>🧭 Today’s Route Parties</b>
-<div id="todayCount" class="big"></div>
-<ul id="todayParties"></ul>
-</div>
-
-<!-- CREDIT LIST -->
-<div class="card">
-<b>⏱ Credit Cycle > 45 Days</b>
-<div id="creditCount" class="big"></div>
-<ul id="creditExceeded"></ul>
-</div>
-
-</div>
-</div>
-
 <script>
 
 const sheetURL="https://docs.google.com/spreadsheets/d/e/2PACX-1vQ3bMMFf71-vdGNiWFnf7pD9XuAAUSA7J-g08ocyC2LNiVOTUHi56lB-7bKTKj0KK9nJGs9vU0THQ0E/pub?gid=1044390124&single=true&output=csv";
-const GOOGLE_FORM="PASTE_YOUR_PREFILL_FORM_LINK";
-const BILLING_URL="PASTE_YOUR_BILLING_APP_LINK";
 
 const tourPlan={
 Monday:["Juria"],
@@ -230,43 +30,59 @@ skipEmptyLines:true,
 
 complete:function(res){
 
-window.sheetData=res.data;
-const data=sheetData;
+const data=res.data;
 
-let fyBusiness=0,fyBalance=0;
-let totalBusiness=0,totalCollection=0;
+// 🔷 TOTAL FY
+let fyBusiness=0;
+let fyBalance=0;
+
+// 🔷 MTD TOTAL
+let mtdBusiness=0;
+let mtdCollection=0;
+
+// 🔷 TOUR DATA
+let tourBusiness=0;
+let tourCollection=0;
+let tourBalance=0;
+let tourShops=0;
+let tourActive=0;
+let tourInactive=0;
+
 let active=0,inactive=0;
 
-let tourShops=0,tourActive=0,tourInactive=0;
-let tourBusiness=0,tourCollection=0;
-let areaBalance=0;
-
-let todayPartyArr=[],creditArr=[];
+let todayPartyArr=[];
+let creditArr=[];
 
 data.forEach(row=>{
 
-fyBusiness+=cleanNumber(row["BUSINESS"]);
-fyBalance+=cleanNumber(row["BALANCE"]);
+let businessFY=cleanNumber(row["BUSINESS"]);
+let balance=cleanNumber(row["BALANCE"]);
+let businessMTD=cleanNumber(row["BUSINESS CURRENT MONTH"]);
+let collectionMTD=cleanNumber(row["Collections Current Month"]);
+let status=(row["ACCOUNT STATUS"]||"").toUpperCase();
 
-if(row["ACCOUNT STATUS"]==="ACTIVE") active++; else inactive++;
+fyBusiness+=businessFY;
+fyBalance+=balance;
 
-totalBusiness+=cleanNumber(row["BUSINESS CURRENT MONTH"]);
-totalCollection+=cleanNumber(row["Collections Current Month"]);
+mtdBusiness+=businessMTD;
+mtdCollection+=collectionMTD;
+
+if(status==="ACTIVE") active++; else inactive++;
 
 if(todayAreas.includes(row["AREA"])){
 
 tourShops++;
 
-if(row["ACCOUNT STATUS"]==="ACTIVE") tourActive++; else tourInactive++;
+if(status==="ACTIVE") tourActive++;
+else tourInactive++;
 
-tourBusiness+=cleanNumber(row["BUSINESS CURRENT MONTH"]);
-tourCollection+=cleanNumber(row["Collections Current Month"]);
-
-areaBalance+=cleanNumber(row["BALANCE"]);
+tourBusiness+=businessMTD;
+tourCollection+=collectionMTD;
+tourBalance+=balance;
 
 todayPartyArr.push({
 name:row["PARTY"],
-balance:cleanNumber(row["BALANCE"])
+balance
 });
 
 if(cleanNumber(row["AVG CREDIT CYCLE"])>45){
@@ -280,29 +96,35 @@ credit:row["AVG CREDIT CYCLE"]
 
 });
 
-// HEADER
+// ✅ HEADER
 let totalCollectionFY=fyBusiness-fyBalance;
 let percent=fyBusiness?(totalCollectionFY/fyBusiness)*100:0;
 
-document.getElementById("totalBusiness").innerHTML=`💼 Business: ₹${Math.round(fyBusiness).toLocaleString()}`;
-document.getElementById("totalCollection").innerHTML=`💰 Collection: ₹${Math.round(totalCollectionFY).toLocaleString()}`;
-document.getElementById("businessStatus").innerHTML=`Status: ${percent.toFixed(0)}%`;
+document.getElementById("totalBusiness").innerHTML=
+`💼 Business: ₹${Math.round(fyBusiness).toLocaleString()}`;
+
+document.getElementById("totalCollection").innerHTML=
+`💰 Collection: ₹${Math.round(totalCollectionFY).toLocaleString()}`;
+
+document.getElementById("businessStatus").innerHTML=
+`Status: ${percent.toFixed(0)}%`;
 
 let bar=document.getElementById("progressBar");
 bar.style.width=percent+"%";
+
 if(percent<40) bar.style.background="red";
 else if(percent<70) bar.style.background="orange";
 else bar.style.background="limegreen";
 
-// QUICK STATS
+// ✅ QUICK STATS
 document.getElementById("quickStats").innerHTML=
 `Total Shops: ${data.length}<br>
 Active: ${active} | Inactive: ${inactive}<br>
-MTD Business: ₹${Math.round(totalBusiness).toLocaleString()}<br>
-MTD Collection: ₹${Math.round(totalCollection).toLocaleString()}`;
+MTD Business: ₹${Math.round(mtdBusiness).toLocaleString()}<br>
+MTD Collection: ₹${Math.round(mtdCollection).toLocaleString()}`;
 
-// TOUR STATS
-let target=tourBusiness*0.30;
+// ✅ TOUR STATS
+let target=tourBalance*0.30;
 let achievement=target?(tourCollection/target*100):0;
 
 document.getElementById("tourStats").innerHTML=
@@ -313,74 +135,35 @@ MTD Collection: ₹${Math.round(tourCollection).toLocaleString()}<br>
 Target: ₹${Math.round(target).toLocaleString()}<br>
 Achievement: ${achievement.toFixed(0)}%`;
 
-// TARGET
+// ✅ TARGET
 document.getElementById("dailyTarget").innerText=
-"₹"+Math.round(areaBalance*0.30).toLocaleString();
+"₹"+Math.round(target).toLocaleString();
 
-// ROUTE LIST
-document.getElementById("todayCount").innerHTML=`Total Parties: ${todayPartyArr.length}`;
+// ✅ ROUTE LIST
+document.getElementById("todayCount").innerHTML=
+`Total Parties: ${todayPartyArr.length}`;
+
 document.getElementById("todayParties").innerHTML=
-todayPartyArr.map(p=>`<li onclick="showParty('${p.name}')">${p.name} – ₹${p.balance.toLocaleString()}</li>`).join("");
+todayPartyArr.map(p=>`<li onclick="showParty('${p.name}')">
+${p.name} – ₹${p.balance.toLocaleString()}
+</li>`).join("");
 
-// CREDIT LIST
-document.getElementById("creditCount").innerHTML=`Total Parties: ${creditArr.length}`;
+// ✅ CREDIT LIST
+document.getElementById("creditCount").innerHTML=
+`Total Parties: ${creditArr.length}`;
+
 document.getElementById("creditExceeded").innerHTML=
-creditArr.map(c=>`<li onclick="showParty('${c.name}')">${c.name} – ${c.credit} days</li>`).join("");
+creditArr.map(c=>`<li onclick="showParty('${c.name}')">
+${c.name} – ${c.credit} days
+</li>`).join("");
 
 }
+
 });
-}
 
-function showParty(name){
-
-let party=sheetData.find(p=>p["PARTY"]===name);
-
-let phone=party[Object.keys(party)[13]]||"";
-let cleanPhone=phone.toString().replace(/[^0-9]/g,"");
-
-let callLink=`tel:+91${cleanPhone}`;
-
-let waMsg=`Dear ${name},
-Kind reminder that your outstanding balance is ₹${cleanNumber(party["BALANCE"]).toLocaleString()}.
-– Aaradhya Pharmaceuticals`;
-
-let waLink=`https://wa.me/91${cleanPhone}?text=${encodeURIComponent(waMsg)}`;
-
-document.getElementById("partyCard").style.display="block";
-
-if(party["ACCOUNT STATUS"]==="BLOCK"){
-partyCard.style.border="2px solid red";
-}else{
-partyCard.style.border="2px solid #1e8e7e";
-}
-
-document.getElementById("partyDetails").innerHTML=`
-<b>${name}</b><br><br>
-Area: ${party["AREA"]}<br>
-Status: <span class="${party["ACCOUNT STATUS"]==="BLOCK"?"redText":""}">${party["ACCOUNT STATUS"]}</span><br>
-Balance: ₹${cleanNumber(party["BALANCE"]).toLocaleString()}<br>
-Reactivate by Paying: ₹${cleanNumber(party["Payment needed to Reactivate"]).toLocaleString()}<br>
-FY Business: ₹${cleanNumber(party["BUSINESS"]).toLocaleString()}<br>
-MTD Business: ₹${cleanNumber(party["BUSINESS CURRENT MONTH"]).toLocaleString()}<br>
-MTD Collection: ₹${cleanNumber(party["Collections Current Month"]).toLocaleString()}<br>
-Avg Credit Cycle: ${party["AVG CREDIT CYCLE"]} days<br>
-Balance %: ${party["Balance as % of Business"]}%
-`;
-
-document.getElementById("actionButtons").innerHTML=`
-<a href="${callLink}"><button class="call">📞 Call</button></a>
-<a href="${waLink}" target="_blank"><button class="whatsapp">💬 WhatsApp</button></a>
-<a href="${GOOGLE_FORM}" target="_blank"><button class="collect">💰 Collect</button></a>
-<a href="${BILLING_URL}" target="_blank"><button class="bill">🧾 Bill</button></a>
-`;
-
-window.scrollTo({top:0,behavior:"smooth"});
 }
 
 loadData();
 setInterval(loadData,300000);
 
 </script>
-
-</body>
-</html>
