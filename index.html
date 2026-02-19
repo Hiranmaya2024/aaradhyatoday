@@ -36,7 +36,6 @@ button{padding:10px;border:none;border-radius:8px;margin:5px 5px 0 0;font-weight
 <div class="card" id="partyCard" style="display:none;border:2px solid #1e8e7e;">
 <b>👤 Party Details</b>
 <div id="partyDetails" class="big"></div>
-
 <div id="actionButtons"></div>
 </div>
 
@@ -56,12 +55,14 @@ button{padding:10px;border:none;border-radius:8px;margin:5px 5px 0 0;font-weight
 </div>
 
 <div class="card">
-<b>🚨 Top 10 High Risk Parties</b>
-<ul id="riskParties"></ul>
+<b>🧭 Today’s Route Parties</b>
+<div id="todayCount" class="big"></div>
+<ul id="todayParties"></ul>
 </div>
 
 <div class="card">
-<b>📌 Top 10 Credit Cycle Exceeded</b>
+<b>⏱ Credit Cycle > 45 Days</b>
+<div id="creditCount" class="big"></div>
 <ul id="creditExceeded"></ul>
 </div>
 
@@ -115,6 +116,8 @@ const STATUS = col("accountstatus");
 const BALANCE = col("balance");
 const BUSINESS_MTD = col("businesscurrentmonth");
 const COLLECTION_MTD = col("collectionscurrentmonth");
+const REACTIVATE = col("paymentneededtoreactivate");
+const FY_BUSINESS = col("business");
 const RISK = col("balanceasofbusiness");
 const CREDIT = col("avgcreditcycle");
 
@@ -125,7 +128,8 @@ let tourShops=0,tourActive=0,tourInactive=0;
 let tourBusiness=0,tourCollection=0;
 let areaBalance=0;
 
-let riskArr=[],creditArr=[];
+let todayPartyArr=[];
+let creditArr=[];
 
 data.forEach(row=>{
 
@@ -149,13 +153,22 @@ tourBusiness+=b;
 tourCollection+=c;
 
 let balance=cleanNumber(row[BALANCE]);
-let risk=cleanNumber(row[RISK]);
-let credit=cleanNumber(row[CREDIT]);
-
 areaBalance+=balance;
 
-if(risk>0) riskArr.push({party:row[PARTY],balance,risk});
-if(credit>45) creditArr.push({party:row[PARTY],credit});
+todayPartyArr.push({
+name:row[PARTY],
+balance
+});
+
+let credit=cleanNumber(row[CREDIT]);
+
+if(credit>45){
+creditArr.push({
+name:row[PARTY],
+credit
+});
+}
+
 }
 
 });
@@ -180,19 +193,22 @@ Achievement: ${achievement.toFixed(0)}%`;
 document.getElementById("dailyTarget").innerText=
 "₹"+Math.round(areaBalance*0.30).toLocaleString();
 
-riskArr.sort((a,b)=>b.risk-a.risk);
-creditArr.sort((a,b)=>b.credit-a.credit);
+document.getElementById("todayCount").innerHTML=
+`Total Parties: ${todayPartyArr.length}`;
 
-document.getElementById("riskParties").innerHTML=
-riskArr.slice(0,10).map(r=>
-`<li onclick="showParty('${r.party.replace(/'/g,"")}')">
-${r.party} – ₹${r.balance.toLocaleString()} – ${r.risk}%
+document.getElementById("todayParties").innerHTML=
+todayPartyArr.map(p=>
+`<li onclick="showParty('${p.name.replace(/'/g,"")}')">
+${p.name} – ₹${p.balance.toLocaleString()}
 </li>`).join("");
 
+document.getElementById("creditCount").innerHTML=
+`Total Parties: ${creditArr.length}`;
+
 document.getElementById("creditExceeded").innerHTML=
-creditArr.slice(0,10).map(c=>
-`<li onclick="showParty('${c.party.replace(/'/g,"")}')">
-${c.party} – ${c.credit} days
+creditArr.map(c=>
+`<li onclick="showParty('${c.name.replace(/'/g,"")}')">
+${c.name} – ${c.credit} days
 </li>`).join("");
 
 }
@@ -203,7 +219,8 @@ ${c.party} – ${c.credit} days
 
 function showParty(name){
 
-const columns = Object.keys(sheetData[0]);
+const data = sheetData;
+const columns = Object.keys(data[0]);
 const col = n => columns.find(c => normalize(c).includes(n));
 
 const PARTY = col("party");
@@ -217,50 +234,31 @@ const COLLECTION_MTD = col("collectionscurrentmonth");
 const CREDIT = col("avgcreditcycle");
 const RISK = col("balanceasofbusiness");
 
-let party = sheetData.find(p => p[PARTY] === name);
+let party = data.find(p => p[PARTY] === name);
 
 document.getElementById("partyCard").style.display="block";
 
 document.getElementById("partyDetails").innerHTML=`
-
 <b>${name}</b><br><br>
 Area: ${party[AREA]}<br>
 Status: ${party[STATUS]}<br>
 Balance: ₹${cleanNumber(party[BALANCE]).toLocaleString()}<br>
 Reactivate by Paying: ₹${cleanNumber(party[REACTIVATE]).toLocaleString()}<br><br>
-
 FY Business: ₹${cleanNumber(party[FY_BUSINESS]).toLocaleString()}<br>
 MTD Business: ₹${cleanNumber(party[BUSINESS_MTD]).toLocaleString()}<br>
 MTD Collection: ₹${cleanNumber(party[COLLECTION_MTD]).toLocaleString()}<br><br>
-
 Avg Credit Cycle: ${party[CREDIT]} days<br>
 Balance % of Business: ${party[RISK]}%
 `;
 
 document.getElementById("actionButtons").innerHTML=`
-<button class="call" onclick="callParty()">📞 Call</button>
-<button class="whatsapp" onclick="whatsappParty()">💬 WhatsApp</button>
-<button class="collect" onclick="collectPayment()">💰 Collect</button>
-<button class="bill" onclick="startBilling()">🧾 Bill</button>
+<button class="call" onclick="alert('Call feature')">📞 Call</button>
+<button class="whatsapp" onclick="alert('WhatsApp feature')">💬 WhatsApp</button>
+<button class="collect" onclick="alert('Collection entry')">💰 Collect</button>
+<button class="bill" onclick="alert('Billing screen')">🧾 Bill</button>
 `;
 
 window.scrollTo({top:0,behavior:"smooth"});
-}
-
-function callParty(){
-alert("Call party feature – link with phone column later");
-}
-
-function whatsappParty(){
-alert("WhatsApp feature – link with phone column later");
-}
-
-function collectPayment(){
-alert("Open collection entry screen");
-}
-
-function startBilling(){
-alert("Open billing screen");
 }
 
 loadData();
