@@ -3,7 +3,6 @@
 <head>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>AARADHYA TODAY</title>
-
 <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
 
 <style>
@@ -16,36 +15,26 @@ background:linear-gradient(90deg,#1e8e7e,#2fa36b);
 color:white;text-align:center;padding:12px;
 }
 
-button.refresh{
-margin-top:6px;padding:6px 12px;border:none;border-radius:6px;
-font-weight:bold;cursor:pointer;
-}
+.progressBox{background:#ffffff40;border-radius:10px;height:8px;margin:6px auto;max-width:500px;}
+#progressBar{height:8px;width:0%;border-radius:10px;}
+
+button.refresh{margin-top:6px;padding:6px 12px;border:none;border-radius:6px;font-weight:bold;}
 
 .container{padding:12px;max-width:1400px;margin:auto;}
 .dashboard-grid{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));}
 
 .card{background:white;padding:14px;border-radius:14px;box-shadow:0 2px 8px rgba(0,0,0,0.08);}
-.big{font-size:16px;font-weight:bold;color:#1e8e7e;line-height:1.6;}
+.big{font-size:15px;font-weight:bold;color:#1e8e7e;line-height:1.6;}
 
 ul{padding-left:18px;margin:0;max-height:260px;overflow:auto;}
 li{cursor:pointer;margin-bottom:6px;}
 
-.blockCard{border:2px solid #dc2626 !important;background:#fff1f2 !important;}
-.blockHeader{color:#dc2626;font-weight:bold;}
+.blockCard{border:2px solid #dc2626;background:#fff1f2;}
+.unlockBox{background:#16a34a;color:white;padding:8px;border-radius:8px;margin:8px 0;text-align:center;font-weight:bold;}
+.payBox{background:#dc2626;color:white;padding:10px;border-radius:10px;margin:10px 0;text-align:center;font-weight:bold;}
 
-.payBox{
-background:#dc2626;color:white;padding:12px;border-radius:12px;
-margin:12px 0;text-align:center;font-size:18px;font-weight:bold;
-}
-
-.unlockBox{
-background:#16a34a;color:white;padding:10px;border-radius:10px;
-margin:10px 0;text-align:center;font-weight:bold;
-}
-
-.reactivationBox{background:#fff;border:2px solid #dc2626;padding:12px;border-radius:12px;margin:12px 0;}
-.reactivationBarBg{background:#ffe4e6;height:10px;border-radius:10px;margin-top:6px;}
-.reactivationBar{height:10px;border-radius:10px;background:#dc2626;}
+.summaryGrid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-top:8px;}
+.summaryBox{background:#fff1f2;padding:8px;border-radius:8px;font-weight:bold;}
 </style>
 </head>
 
@@ -55,21 +44,54 @@ margin:10px 0;text-align:center;font-weight:bold;
 <b>AARADHYA TODAY</b>
 <div id="tourArea"></div>
 
+<div id="totalBusiness"></div>
+<div id="totalCollection"></div>
+
+<div class="progressBox"><div id="progressBar"></div></div>
+<div id="businessStatus"></div>
+
 <button class="refresh" onclick="loadData()">🔄 Refresh</button>
-<div id="lastUpdated" style="font-size:12px;margin-top:4px;"></div>
+<div id="lastUpdated" style="font-size:12px;"></div>
 </div>
 
 <div class="container">
 <div class="dashboard-grid">
 
-<div class="card" id="partyCard" style="display:none;border:2px solid #1e8e7e;">
+<div class="card" id="partyCard" style="display:none;">
 <b>👤 Party Details</b>
 <div id="partyDetails" class="big"></div>
 </div>
 
 <div class="card">
+<b>🚫 Route Reactivation Summary</b>
+<div id="reactivationSummary" class="big"></div>
+</div>
+
+<div class="card">
+<b>📊 Quick Stats – All Areas (MTD)</b>
+<div id="quickStats" class="big"></div>
+</div>
+
+<div class="card">
+<b>📍 Today’s Tour Performance (MTD)</b>
+<div id="tourStats" class="big"></div>
+</div>
+
+<div class="card">
+<b>🎯 Today’s Collection Target</b>
+<div id="dailyTarget" class="big"></div>
+</div>
+
+<div class="card">
 <b>🧭 Today’s Route Parties</b>
+<div id="todayCount" class="big"></div>
 <ul id="todayParties"></ul>
+</div>
+
+<div class="card">
+<b>⏱ Credit Cycle > 45 Days</b>
+<div id="creditCount" class="big"></div>
+<ul id="creditExceeded"></ul>
 </div>
 
 </div>
@@ -81,17 +103,24 @@ const sheetURL="https://docs.google.com/spreadsheets/d/e/2PACX-1vQ3bMMFf71-vdGNi
 
 let COL={},sheetData=[];
 
-function cleanNumber(val){return Number(String(val||0).replace(/[^0-9.-]/g,""))||0;}
-function normalize(text){return text.toLowerCase().replace(/[^a-z]/g,"");}
+const tourPlan={
+Monday:["Juria"],Tuesday:["Ghess"],Wednesday:["Gaisilate"],
+Thursday:["Jharbandh"],Friday:["Padampur"],Saturday:["Paikmal","Mandosil"]
+};
+
+function cleanNumber(v){return Number(String(v||0).replace(/[^0-9.-]/g,""))||0;}
+function normalize(t){return t.toLowerCase().replace(/[^a-z]/g,"");}
 
 function loadData(){
+
+const today=new Date().toLocaleDateString("en-US",{weekday:"long"});
+const todayAreas=tourPlan[today]||[];
+document.getElementById("tourArea").innerText=today+" Tour → "+todayAreas.join(", ");
 
 Papa.parse(sheetURL+"&t="+new Date().getTime(),{
 download:true,header:true,skipEmptyLines:true,
 
 complete:function(res){
-
-if(!res.data.length) return;
 
 sheetData=res.data;
 
@@ -99,33 +128,110 @@ const columns=Object.keys(sheetData[0]);
 const col=n=>columns.find(c=>normalize(c).includes(n));
 
 COL={
-PARTY:col("party"),
-AREA:col("area"),
-STATUS:col("accountstatus"),
-BUSINESS:col("business"),
-BALANCE:col("balance"),
+PARTY:col("party"),AREA:col("area"),STATUS:col("accountstatus"),
+BUSINESS:col("business"),BALANCE:col("balance"),
 BUSINESS_MTD:col("businesscurrentmonth"),
 COLLECTION_MTD:col("collectionscurrentmonth"),
+CREDIT:col("avgcreditcycle"),
 REACTIVATE:col("paymentneededtoreactivate")
 };
 
-let todayList=[];
+let fyBusiness=0,fyBalance=0,mtdBusiness=0,mtdCollection=0;
+let tourBalance=0,tourCollection=0,tourBusiness=0;
+let active=0,inactive=0,tourShops=0,tourActive=0,tourInactive=0;
 
-sheetData.forEach(row=>{
-todayList.push({
-name:row[COL.PARTY],
-balance:cleanNumber(row[COL.BALANCE])
+let blockCount=0,totalReactivate=0,totalRecovered=0,unlockBusiness=0;
+
+let todayList=[],creditList=[];
+
+sheetData.forEach(r=>{
+
+let status=(r[COL.STATUS]||"").toUpperCase();
+
+fyBusiness+=cleanNumber(r[COL.BUSINESS]);
+fyBalance+=cleanNumber(r[COL.BALANCE]);
+
+mtdBusiness+=cleanNumber(r[COL.BUSINESS_MTD]);
+mtdCollection+=cleanNumber(r[COL.COLLECTION_MTD]);
+
+if(status==="ACTIVE")active++;else inactive++;
+
+if(todayAreas.includes(r[COL.AREA])){
+
+tourShops++;
+if(status==="ACTIVE")tourActive++;else tourInactive++;
+
+tourBalance+=cleanNumber(r[COL.BALANCE]);
+tourCollection+=cleanNumber(r[COL.COLLECTION_MTD]);
+tourBusiness+=cleanNumber(r[COL.BUSINESS_MTD]);
+
+todayList.push({name:r[COL.PARTY],balance:cleanNumber(r[COL.BALANCE])});
+
+if(cleanNumber(r[COL.CREDIT])>45){
+creditList.push({name:r[COL.PARTY],credit:r[COL.CREDIT]});
+}
+
+if(status==="BLOCK"){
+blockCount++;
+totalReactivate+=cleanNumber(r[COL.REACTIVATE]);
+totalRecovered+=cleanNumber(r[COL.COLLECTION_MTD]);
+unlockBusiness+=cleanNumber(r[COL.BUSINESS]);
+}
+
+}
+
 });
-});
+
+let totalCollectionFY=fyBusiness-fyBalance;
+let percent=fyBusiness?(totalCollectionFY/fyBusiness)*100:0;
+
+document.getElementById("totalBusiness").innerHTML=`💼 Business: ₹${Math.round(fyBusiness).toLocaleString()}`;
+document.getElementById("totalCollection").innerHTML=`💰 Collection: ₹${Math.round(totalCollectionFY).toLocaleString()}`;
+document.getElementById("businessStatus").innerHTML=`Status: ${percent.toFixed(0)}%`;
+
+let bar=document.getElementById("progressBar");
+bar.style.width=percent+"%";
+bar.style.background=percent<40?"red":percent<70?"orange":"limegreen";
+
+document.getElementById("quickStats").innerHTML=
+`Total Shops: ${sheetData.length}<br>
+Active: ${active} | Inactive: ${inactive}<br>
+MTD Business: ₹${Math.round(mtdBusiness).toLocaleString()}<br>
+MTD Collection: ₹${Math.round(mtdCollection).toLocaleString()}`;
+
+let target=tourBalance*0.30;
+document.getElementById("dailyTarget").innerText="₹"+Math.round(target).toLocaleString();
+
+document.getElementById("tourStats").innerHTML=
+`Total Shops: ${tourShops}<br>
+Active: ${tourActive} | Inactive: ${tourInactive}<br>
+MTD Business: ₹${Math.round(tourBusiness).toLocaleString()}<br>
+MTD Collection: ₹${Math.round(tourCollection).toLocaleString()}`;
+
+let remainingReactivate=totalReactivate-totalRecovered;
+if(remainingReactivate<0)remainingReactivate=0;
+
+document.getElementById("reactivationSummary").innerHTML=`
+<div class="summaryGrid">
+<div class="summaryBox">Blocked: ${blockCount}</div>
+<div class="summaryBox">Unlock Business: ₹${Math.round(unlockBusiness).toLocaleString()}</div>
+<div class="summaryBox">Target: ₹${Math.round(totalReactivate).toLocaleString()}</div>
+<div class="summaryBox">Recovered: ₹${Math.round(totalRecovered).toLocaleString()}</div>
+<div class="summaryBox" style="grid-column:1/3;background:#dc2626;color:white;">
+Remaining: ₹${Math.round(remainingReactivate).toLocaleString()}
+</div>
+</div>`;
+
+document.getElementById("todayCount").innerHTML=`Total Parties: ${todayList.length}`;
 
 document.getElementById("todayParties").innerHTML=
-todayList.map(p=>`
-<li data-name="${p.name}" onclick="showParty(this.dataset.name)">
-${p.name} – ₹${p.balance.toLocaleString()}
-</li>`).join("");
+todayList.map(p=>`<li onclick="showParty('${p.name}')">${p.name} – ₹${p.balance.toLocaleString()}</li>`).join("");
 
-document.getElementById("lastUpdated").innerText=
-"Last updated: "+new Date().toLocaleTimeString();
+document.getElementById("creditCount").innerHTML=`Total Parties: ${creditList.length}`;
+document.getElementById("creditExceeded").innerHTML=
+creditList.map(c=>`<li onclick="showParty('${c.name}')">${c.name} – ${c.credit} days</li>`).join("");
+
+document.getElementById("lastUpdated").innerText="Last updated: "+new Date().toLocaleTimeString();
 
 }});
 
@@ -134,7 +240,7 @@ document.getElementById("lastUpdated").innerText=
 function showParty(name){
 
 const party=sheetData.find(r=>r[COL.PARTY]==name);
-if(!party) return;
+if(!party)return;
 
 const isBlock=(party[COL.STATUS]||"").toUpperCase()==="BLOCK";
 
@@ -147,33 +253,19 @@ let recovered=cleanNumber(party[COL.COLLECTION_MTD]);
 let remaining=target-recovered;
 if(remaining<0)remaining=0;
 
-let progress=target?(recovered/target)*100:0;
 let unlockBusiness=cleanNumber(party[COL.BUSINESS]);
 
 document.getElementById("partyDetails").innerHTML=`
-
-<b class="${isBlock?'blockHeader':''}" style="font-size:18px">${name}</b><br><br>
-
+<b style="font-size:18px">${name}</b><br><br>
 Area: ${party[COL.AREA]}<br>
 Status: ${party[COL.STATUS]}<br>
 
 ${isBlock?`<div class="unlockBox">🔓 Unlock Billing Potential: ₹${unlockBusiness.toLocaleString()}</div>`:""}
-
 ${isBlock?`<div class="payBox">💰 Pay ₹${remaining.toLocaleString()} to Unblock</div>`:""}
 
 Balance: ₹${cleanNumber(party[COL.BALANCE]).toLocaleString()}<br>
 MTD Collection: ₹${recovered.toLocaleString()}
-
-${isBlock?`
-<div class="reactivationBox">
-Progress
-<div class="reactivationBarBg">
-<div class="reactivationBar" style="width:${progress}%"></div>
-</div>
-${progress.toFixed(0)}%
-</div>`:""}
 `;
-
 }
 
 loadData();
