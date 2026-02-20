@@ -7,32 +7,12 @@
 <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
 
 <style>
-*{box-sizing:border-box}
 body{font-family:Arial;margin:0;background:#f3fbf9;}
-
-.header{
-position:sticky;top:0;z-index:1000;
-background:linear-gradient(90deg,#1e8e7e,#2fa36b);
-color:white;text-align:center;padding:12px;
-}
-
-.progressBox{background:#ffffff40;border-radius:10px;height:8px;margin:6px auto;max-width:500px;}
-#progressBar{height:8px;border-radius:10px;}
-
-button.refresh{margin-top:6px;padding:6px 12px;border:none;border-radius:6px;font-weight:bold;}
-
-.container{padding:12px;max-width:1400px;margin:auto;}
-.dashboard-grid{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));}
-
-.card{background:white;padding:14px;border-radius:14px;box-shadow:0 2px 8px rgba(0,0,0,0.08);}
-.big{font-size:15px;font-weight:bold;color:#1e8e7e;line-height:1.6;}
-
-ul{padding-left:18px;margin:0;max-height:260px;overflow:auto;}
-li{cursor:pointer;margin-bottom:6px;}
-
-.blockCard{border:2px solid #dc2626;background:#fff1f2;}
-.unlockBox{background:#16a34a;color:white;padding:8px;border-radius:8px;margin:8px 0;text-align:center;font-weight:bold;}
-.payBox{background:#dc2626;color:white;padding:10px;border-radius:10px;margin:10px 0;text-align:center;font-weight:bold;}
+.header{background:#1e8e7e;color:white;text-align:center;padding:12px;}
+.container{padding:12px}
+.card{background:white;padding:12px;border-radius:12px;margin-bottom:12px}
+ul{padding-left:18px}
+li{cursor:pointer;margin-bottom:6px}
 </style>
 </head>
 
@@ -41,28 +21,15 @@ li{cursor:pointer;margin-bottom:6px;}
 <div class="header">
 <b>AARADHYA TODAY</b>
 <div id="tourArea"></div>
-
-<div id="totalBusiness"></div>
-<div id="totalCollection"></div>
-
-<div class="progressBox"><div id="progressBar"></div></div>
-<div id="businessStatus"></div>
-
-<button class="refresh" onclick="loadData()">🔄 Refresh</button>
-<div id="lastUpdated" style="font-size:12px;"></div>
+<button onclick="loadData()">🔄 Refresh</button>
+<div id="lastUpdated"></div>
 </div>
 
 <div class="container">
-<div class="dashboard-grid">
-
-<div class="card" id="partyCard" style="display:none;">
-<b>👤 Party Details</b>
-<div id="partyDetails" class="big"></div>
-</div>
 
 <div class="card">
 <b>🚫 Route Reactivation Summary</b>
-<div id="reactivationSummary" class="big"></div>
+<div id="reactivationSummary"></div>
 </div>
 
 <div class="card">
@@ -71,40 +38,27 @@ li{cursor:pointer;margin-bottom:6px;}
 </div>
 
 <div class="card">
-<b>📊 Quick Stats – All Areas (MTD)</b>
-<div id="quickStats" class="big"></div>
-</div>
-
-<div class="card">
-<b>📍 Today’s Tour Performance (MTD)</b>
-<div id="tourStats" class="big"></div>
-</div>
-
-<div class="card">
-<b>🎯 Today’s Collection Target</b>
-<div id="dailyTarget" class="big"></div>
-</div>
-
-<div class="card">
 <b>🧭 Today’s Route Parties</b>
-<div id="todayCount" class="big"></div>
+<div id="todayCount"></div>
 <ul id="todayParties"></ul>
 </div>
 
 <div class="card">
 <b>⏱ Credit Cycle > 45 Days</b>
-<div id="creditCount" class="big"></div>
+<div id="creditCount"></div>
 <ul id="creditExceeded"></ul>
 </div>
 
+<div class="card" id="partyCard" style="display:none">
+<b>👤 Party Details</b>
+<div id="partyDetails"></div>
 </div>
+
 </div>
 
 <script>
 
-const sheetURL="YOUR SAME GOOGLE SHEET LINK";
-
-let COL={},sheetData=[];
+const sheetURL="https://docs.google.com/spreadsheets/d/e/2PACX-1vQ3bMMFf71-vdGNiWFnf7pD9XuAAUSA7J-g08ocyC2LNiVOTUHi56lB-7bKTKj0KK9nJGs9vU0THQ0E/pub?gid=1044390124&single=true&output=csv";
 
 const tourPlan={
 Monday:["JURIA"],
@@ -115,7 +69,10 @@ Friday:["PADAMPUR"],
 Saturday:["PAIKMAL","MANDOSIL"]
 };
 
-function cleanNumber(v){
+let sheetData=[];
+let COL={};
+
+function num(v){
 return Number(String(v||0).replace(/[^0-9.-]/g,""))||0;
 }
 
@@ -132,25 +89,32 @@ document.getElementById("tourArea").innerText=
 today+" Tour → "+todayAreas.join(", ");
 
 Papa.parse(sheetURL+"&t="+Date.now(),{
-download:true,header:true,skipEmptyLines:true,
+download:true,
+header:true,
+skipEmptyLines:true,
 
 complete:function(res){
 
+if(!res.data || !res.data.length){
+alert("No data received from sheet");
+return;
+}
+
 sheetData=res.data;
 
-const columns=Object.keys(sheetData[0]);
-const col=n=>columns.find(c=>normalize(c).includes(n));
+// SAFE COLUMN MAP
+const cols=Object.keys(sheetData[0]);
+
+const findCol = key =>
+cols.find(c=>normalize(c).includes(key)) || "" ;
 
 COL={
-PARTY:col("party"),
-AREA:col("area"),
-STATUS:col("accountstatus"),
-BUSINESS:col("business"),
-BALANCE:col("balance"),
-BUSINESS_MTD:col("businesscurrentmonth"),
-COLLECTION_MTD:col("collectionscurrentmonth"),
-CREDIT:col("avgcreditcycle"),
-REACTIVATE:col("paymentneededtoreactivate")
+PARTY:findCol("party"),
+AREA:findCol("area"),
+STATUS:findCol("accountstatus"),
+BALANCE:findCol("balance"),
+REACTIVATE:findCol("reactivate"),
+CREDIT:findCol("credit")
 };
 
 let blockCount=0;
@@ -162,28 +126,29 @@ let creditList=[];
 
 sheetData.forEach(r=>{
 
+let area=(r[COL.AREA]||"").toUpperCase().trim();
 let status=(r[COL.STATUS]||"").toUpperCase();
 
-if(todayAreas.includes((r[COL.AREA]||"").toUpperCase())){
+if(todayAreas.includes(area)){
 
 todayList.push({
 name:r[COL.PARTY],
-balance:cleanNumber(r[COL.BALANCE])
+balance:num(r[COL.BALANCE])
 });
 
-// ⏱ CREDIT CYCLE > 45
-if(cleanNumber(r[COL.CREDIT])>45){
+// CREDIT > 45
+if(num(r[COL.CREDIT])>45){
 creditList.push({
 name:r[COL.PARTY],
 credit:r[COL.CREDIT]
 });
 }
 
-// 🚫 BLOCK LOGIC
+// BLOCK
 if(status==="BLOCK"){
 blockCount++;
-targetCount+=cleanNumber(r[COL.REACTIVATE]);
-unlockBusiness+=cleanNumber(r[COL.BALANCE]);
+targetCount+=num(r[COL.REACTIVATE]);
+unlockBusiness+=num(r[COL.BALANCE]);
 }
 
 }
@@ -193,25 +158,29 @@ unlockBusiness+=cleanNumber(r[COL.BALANCE]);
 // ROUTE SUMMARY
 document.getElementById("reactivationSummary").innerHTML=
 `Blocked: ${blockCount}<br>
-Unlock Business: ₹${Math.round(unlockBusiness).toLocaleString()}<br>
-Target: ₹${Math.round(targetCount).toLocaleString()}`;
+Unlock Business: ₹${unlockBusiness.toLocaleString()}<br>
+Target: ₹${targetCount.toLocaleString()}`;
 
 // SMART RECOVERY
 document.getElementById("smartRecovery").innerHTML=
-`Collect ₹${Math.round(targetCount).toLocaleString()} → Unlock ₹${Math.round(unlockBusiness).toLocaleString()}`;
+`Collect ₹${targetCount.toLocaleString()} → Unlock ₹${unlockBusiness.toLocaleString()}`;
 
-// LISTS
-document.getElementById("todayCount").innerHTML=`Total Parties: ${todayList.length}`;
+// TODAY LIST
+document.getElementById("todayCount").innerText=
+"Total Parties: "+todayList.length;
 
 document.getElementById("todayParties").innerHTML=
 todayList.map(p=>`<li onclick="showParty('${p.name}')">${p.name} – ₹${p.balance.toLocaleString()}</li>`).join("");
 
-document.getElementById("creditCount").innerHTML=`Total Parties: ${creditList.length}`;
+// CREDIT LIST
+document.getElementById("creditCount").innerText=
+"Total Parties: "+creditList.length;
 
 document.getElementById("creditExceeded").innerHTML=
 creditList.map(c=>`<li onclick="showParty('${c.name}')">${c.name} – ${c.credit} days</li>`).join("");
 
-document.getElementById("lastUpdated").innerText="Last updated: "+new Date().toLocaleTimeString();
+document.getElementById("lastUpdated").innerText=
+"Last updated: "+new Date().toLocaleTimeString();
 
 }
 
@@ -224,33 +193,13 @@ function showParty(name){
 let party=sheetData.find(r=>r[COL.PARTY]===name);
 if(!party)return;
 
-let status=(party[COL.STATUS]||"").toUpperCase();
-let isBlock=status==="BLOCK";
+document.getElementById("partyCard").style.display="block";
 
-let balance=cleanNumber(party[COL.BALANCE]);
-let target=cleanNumber(party[COL.REACTIVATE]);
-let recovered=cleanNumber(party[COL.COLLECTION_MTD]);
-let remaining=target-recovered;
-if(remaining<0)remaining=0;
-
-let unlockBusiness=cleanNumber(party[COL.BUSINESS]);
-
-let card=document.getElementById("partyCard");
-card.style.display="block";
-card.classList.toggle("blockCard",isBlock);
-
-document.getElementById("partyDetails").innerHTML=`
-<b>${name}</b><br><br>
+document.getElementById("partyDetails").innerHTML=
+`<b>${name}</b><br>
 Area: ${party[COL.AREA]}<br>
 Status: ${party[COL.STATUS]}<br>
-
-${isBlock?`<div class="unlockBox">🔓 Unlock Business: ₹${unlockBusiness.toLocaleString()}</div>`:""}
-${isBlock?`<div class="payBox">💰 Pay ₹${remaining.toLocaleString()} to Unblock</div>`:""}
-
-Balance: ₹${balance.toLocaleString()}<br>
-MTD Collection: ₹${recovered.toLocaleString()}
-`;
-
+Balance: ₹${num(party[COL.BALANCE]).toLocaleString()}`;
 }
 
 loadData();
