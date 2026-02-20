@@ -29,13 +29,12 @@ ul{padding-left:18px;margin:0;max-height:260px;overflow:auto;}
 li{cursor:pointer;margin-bottom:6px;}
 
 .blockCard{border:2px solid #dc2626;background:#fff1f2;}
+
 .unlockBox{background:#16a34a;color:white;padding:8px;border-radius:8px;margin:8px 0;text-align:center;font-weight:bold;}
 .payBox{background:#dc2626;color:white;padding:10px;border-radius:10px;margin:10px 0;text-align:center;font-weight:bold;}
 
-.recoveryItem{
-background:#ecfdf5;border-left:5px solid #16a34a;
-padding:8px;border-radius:8px;margin-bottom:8px;font-weight:bold;
-}
+.recoveryBarBg{background:#ffe4e6;height:10px;border-radius:10px;margin-top:6px;}
+.recoveryBar{height:10px;background:#dc2626;border-radius:10px;}
 </style>
 </head>
 
@@ -44,12 +43,6 @@ padding:8px;border-radius:8px;margin-bottom:8px;font-weight:bold;
 <div class="header">
 <b>AARADHYA TODAY</b>
 <div id="tourArea"></div>
-
-<div id="totalBusiness"></div>
-<div id="totalCollection"></div>
-
-<div class="progressBox"><div id="progressBar"></div></div>
-<div id="businessStatus"></div>
 
 <button onclick="loadData()">🔄 Refresh</button>
 <div id="lastUpdated" style="font-size:12px;"></div>
@@ -64,40 +57,9 @@ padding:8px;border-radius:8px;margin-bottom:8px;font-weight:bold;
 </div>
 
 <div class="card">
-<b>🚫 Route Reactivation Summary</b>
-<div id="reactivationSummary"></div>
-</div>
-
-<div class="card">
-<b>🧠 Smart Recovery Plan – Today</b>
-<div id="smartRecovery"></div>
-</div>
-
-<div class="card">
-<b>📊 Quick Stats – All Areas (MTD)</b>
-<div id="quickStats"></div>
-</div>
-
-<div class="card">
-<b>📍 Today’s Tour Performance (MTD)</b>
-<div id="tourStats"></div>
-</div>
-
-<div class="card">
-<b>🎯 Today’s Collection Target</b>
-<div id="dailyTarget"></div>
-</div>
-
-<div class="card">
 <b>🧭 Today’s Route Parties</b>
 <div id="todayCount"></div>
 <ul id="todayParties"></ul>
-</div>
-
-<div class="card">
-<b>⏱ Credit Cycle > 45 Days</b>
-<div id="creditCount"></div>
-<ul id="creditExceeded"></ul>
 </div>
 
 </div>
@@ -107,7 +69,7 @@ padding:8px;border-radius:8px;margin-bottom:8px;font-weight:bold;
 
 const sheetURL="https://docs.google.com/spreadsheets/d/e/2PACX-1vQ3bMMFf71-vdGNiWFnf7pD9XuAAUSA7J-g08ocyC2LNiVOTUHi56lB-7bKTKj0KK9nJGs9vU0THQ0E/pub?gid=1044390124&single=true&output=csv";
 
-let COL={},sheetData=[];
+let sheetData=[],COL={};
 
 const tourPlan={
 Monday:["JURIA"],
@@ -148,134 +110,34 @@ COL={
 PARTY:col("party"),
 AREA:col("area"),
 STATUS:col("accountstatus"),
-BUSINESS:col("business"),
 BALANCE:col("balance"),
-BUSINESS_MTD:col("businesscurrentmonth"),
-COLLECTION_MTD:col("collectionscurrentmonth"),
-CREDIT:col("avgcreditcycle"),
-REACTIVATE:col("paymentneededtoreactivate")
+REACTIVATE:col("paymentneededtoreactivate"),
+COLLECTION_MTD:col("collectionscurrentmonth")
 };
 
-let fyBusiness=0,fyBalance=0,mtdBusiness=0,mtdCollection=0;
-let tourBalance=0,tourBusiness=0,tourCollection=0;
-
-let blockCount=0,totalReactivate=0,totalRecovered=0,unlockBusiness=0;
-
-let smartList=[],todayList=[],creditList=[];
+let todayList=[];
 
 sheetData.forEach(r=>{
 
-let status=(r[COL.STATUS]||"").toUpperCase();
-
-fyBusiness+=cleanNumber(r[COL.BUSINESS]);
-fyBalance+=cleanNumber(r[COL.BALANCE]);
-
-mtdBusiness+=cleanNumber(r[COL.BUSINESS_MTD]);
-mtdCollection+=cleanNumber(r[COL.COLLECTION_MTD]);
-
 if(todayAreas.includes((r[COL.AREA]||"").toUpperCase())){
 
-tourBalance+=cleanNumber(r[COL.BALANCE]);
-tourCollection+=cleanNumber(r[COL.COLLECTION_MTD]);
-tourBusiness+=cleanNumber(r[COL.BUSINESS_MTD]);
-
-todayList.push({name:r[COL.PARTY],balance:cleanNumber(r[COL.BALANCE])});
-
-if(cleanNumber(r[COL.CREDIT])>45){
-creditList.push({name:r[COL.PARTY],credit:r[COL.CREDIT]});
-}
-
-if(status==="BLOCK"){
-
-let target=cleanNumber(r[COL.REACTIVATE]);
-let recovered=cleanNumber(r[COL.COLLECTION_MTD]);
-let remaining=target-recovered;
-if(remaining<0)remaining=0;
-
-blockCount++;
-totalReactivate+=target;
-totalRecovered+=recovered;
-unlockBusiness+=cleanNumber(r[COL.BUSINESS]);
-
-smartList.push({
+todayList.push({
 name:r[COL.PARTY],
-remaining,
-unlock:cleanNumber(r[COL.BUSINESS])
+balance:cleanNumber(r[COL.BALANCE])
 });
 
 }
 
-}
-
 });
 
-// HEADER
-let fyCollection=fyBusiness-fyBalance;
-let percent=(fyCollection/fyBusiness)*100;
-
-document.getElementById("totalBusiness").innerHTML=
-`💼 Business: ₹${Math.round(fyBusiness).toLocaleString()}`;
-
-document.getElementById("totalCollection").innerHTML=
-`💰 Collection: ₹${Math.round(fyCollection).toLocaleString()}`;
-
-let bar=document.getElementById("progressBar");
-bar.style.width=percent+"%";
-bar.style.background=percent<40?"red":percent<70?"orange":"limegreen";
-
-document.getElementById("businessStatus").innerHTML=
-`Status: ${percent.toFixed(0)}%`;
-
-// QUICK STATS
-document.getElementById("quickStats").innerHTML=
-`MTD Business: ₹${Math.round(mtdBusiness).toLocaleString()}<br>
-MTD Collection: ₹${Math.round(mtdCollection).toLocaleString()}`;
-
-// TOUR
-document.getElementById("tourStats").innerHTML=
-`Total Shops: ${todayList.length}<br>
-MTD Business: ₹${Math.round(tourBusiness).toLocaleString()}<br>
-MTD Collection: ₹${Math.round(tourCollection).toLocaleString()}`;
-
-let target=tourBalance*0.30;
-document.getElementById("dailyTarget").innerText="₹"+Math.round(target).toLocaleString();
-
-// ROUTE SUMMARY
-let remainingReactivate=totalReactivate-totalRecovered;
-if(remainingReactivate<0)remainingReactivate=0;
-
-document.getElementById("reactivationSummary").innerHTML=
-`Blocked: ${blockCount}<br>
-Unlock Business: ₹${Math.round(unlockBusiness).toLocaleString()}<br>
-Target: ₹${Math.round(totalReactivate).toLocaleString()}<br>
-Recovered: ₹${Math.round(totalRecovered).toLocaleString()}<br>
-Remaining: ₹${Math.round(remainingReactivate).toLocaleString()}`;
-
-// SMART RECOVERY
-smartList.sort((a,b)=>a.remaining-b.remaining);
-let topRecovery=smartList.slice(0,5);
-
-let totalNeed=0,totalUnlock=0;
-topRecovery.forEach(p=>{
-totalNeed+=p.remaining;
-totalUnlock+=p.unlock;
-});
-
-document.getElementById("smartRecovery").innerHTML=
-`Collect ₹${Math.round(totalNeed).toLocaleString()} → Unlock ₹${Math.round(totalUnlock).toLocaleString()}
-${topRecovery.map(p=>`<div class="recoveryItem">${p.name}<br>💰 ₹${p.remaining.toLocaleString()} → 🔓 ₹${p.unlock.toLocaleString()}</div>`).join("")}`;
-
-document.getElementById("todayCount").innerHTML=`Total Parties: ${todayList.length}`;
+document.getElementById("todayCount").innerHTML=
+`Total Parties: ${todayList.length}`;
 
 document.getElementById("todayParties").innerHTML=
 todayList.map(p=>`<li onclick="showParty('${p.name}')">${p.name} – ₹${p.balance.toLocaleString()}</li>`).join("");
 
-document.getElementById("creditCount").innerHTML=`Total Parties: ${creditList.length}`;
-
-document.getElementById("creditExceeded").innerHTML=
-creditList.map(c=>`<li onclick="showParty('${c.name}')">${c.name} – ${c.credit} days</li>`).join("");
-
-document.getElementById("lastUpdated").innerText="Last updated: "+new Date().toLocaleTimeString();
+document.getElementById("lastUpdated").innerText=
+"Last updated: "+new Date().toLocaleTimeString();
 
 }
 
@@ -294,22 +156,44 @@ let isBlock=status==="BLOCK";
 let balance=cleanNumber(party[COL.BALANCE]);
 let target=cleanNumber(party[COL.REACTIVATE]);
 let recovered=cleanNumber(party[COL.COLLECTION_MTD]);
+
 let remaining=target-recovered;
 if(remaining<0)remaining=0;
 
-let unlockBusiness=cleanNumber(party[COL.BUSINESS]);
+let progress=target?((recovered/target)*100):0;
 
 let card=document.getElementById("partyCard");
 card.style.display="block";
 card.classList.toggle("blockCard",isBlock);
 
 document.getElementById("partyDetails").innerHTML=`
-<b>${name}</b><br><br>
+
+<b style="font-size:18px">${name}</b><br><br>
+
 Area: ${party[COL.AREA]}<br>
 Status: ${party[COL.STATUS]}<br>
 
-${isBlock?`<div class="unlockBox">🔓 Unlock Business: ₹${unlockBusiness.toLocaleString()}</div>`:""}
-${isBlock?`<div class="payBox">💰 Pay ₹${remaining.toLocaleString()} to Unblock</div>`:""}
+${isBlock?`
+<div class="unlockBox">
+🔓 Unlock Billing Potential: ₹${balance.toLocaleString()}
+</div>
+
+<div class="payBox">
+💰 Pay ₹${remaining.toLocaleString()} to Unblock
+</div>
+
+<div style="margin-top:8px;font-weight:bold;color:#dc2626;">
+Recovery Progress
+</div>
+
+<div class="recoveryBarBg">
+<div class="recoveryBar" style="width:${progress}%"></div>
+</div>
+
+<div style="margin-top:6px;font-weight:bold;color:#dc2626;">
+${progress.toFixed(0)}% completed
+</div>
+`:""}
 
 Balance: ₹${balance.toLocaleString()}<br>
 MTD Collection: ₹${recovered.toLocaleString()}
