@@ -23,16 +23,20 @@ select{padding:6px;border-radius:8px;margin-bottom:6px}
 .active{border-left:5px solid #22c55e}
 .block{border-left:5px solid #ef4444;background:#fff1f2}
 
-.callBtn{
+.btn{
 display:inline-block;
 margin-top:10px;
+margin-right:6px;
 padding:8px 14px;
-background:#16a34a;
-color:#fff;
 border-radius:8px;
+color:#fff;
 text-decoration:none;
 font-size:14px
 }
+
+.call{background:#16a34a}
+.wa{background:#25D366}
+.nav{background:#2563eb}
 </style>
 </head>
 
@@ -104,7 +108,6 @@ Papa.parse(url,{
 download:true,
 header:true,
 skipEmptyLines:true,
-
 complete:function(res){
 sheetData=res.data;
 render();
@@ -220,6 +223,12 @@ function showParty(name){
 let p=sheetData.find(x=>x["PARTY"]===name);
 
 let phone=p["PHONE"];
+let lat=p["LAT"];
+let lng=p["LNG"];
+
+let mapLink=(lat && lng)
+?`https://www.google.com/maps?q=${lat},${lng}`
+:`https://www.google.com/maps/search/${encodeURIComponent(p["PARTY"]+" "+p["AREA"])}`;
 
 let pay=num(p["Payment needed to Reactivate"]);
 let rec=num(p["Collections Current Month"]);
@@ -239,8 +248,9 @@ p["AREA"]+"<br>"+
 <div class="progressBox"><div class="progressBar" style="width:${progress}%;background:red"></div></div>
 `:"")+
 
-(phone?`<br><a class="callBtn" href="tel:${phone}">☎ Call</a>`:"");
-
+(phone?`<br><a class="btn call" href="tel:${phone}">☎ Call</a>`:"")+
+(phone?`<a class="btn wa" href="https://wa.me/91${phone}" target="_blank">💬 WhatsApp</a>`:"")+
+`<a class="btn nav" href="${mapLink}" target="_blank">📍 Navigate</a>`;
 }
 
 function renderCreditLeaderboard(data){
@@ -261,6 +271,5 @@ daySelect.onchange=render;
 loadData();
 
 </script>
-
 </body>
 </html>
