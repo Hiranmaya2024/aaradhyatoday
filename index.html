@@ -22,6 +22,17 @@ select{padding:6px;border-radius:8px;margin-bottom:6px}
 
 .active{border-left:5px solid #22c55e}
 .block{border-left:5px solid #ef4444;background:#fff1f2}
+
+.callBtn{
+display:inline-block;
+margin-top:10px;
+padding:8px 14px;
+background:#16a34a;
+color:#fff;
+border-radius:8px;
+text-decoration:none;
+font-size:14px
+}
 </style>
 </head>
 
@@ -30,6 +41,8 @@ select{padding:6px;border-radius:8px;margin-bottom:6px}
 <div class="header">
 
 <select id="daySelect"></select>
+
+<div id="dayArea"></div>
 
 <div id="kpi"></div>
 <div class="progressBox"><div id="progressBar" class="progressBar"></div></div>
@@ -102,6 +115,10 @@ render();
 function render(){
 
 let day=daySelect.value;
+let areas=tourPlan[day].join(", ");
+
+document.getElementById("dayArea").innerHTML=
+"<b>"+day.toUpperCase()+" → "+areas+"</b>";
 
 let data=sheetData.filter(r=>
 tourPlan[day].includes((r["AREA"]||"").toUpperCase())
@@ -202,6 +219,8 @@ function showParty(name){
 
 let p=sheetData.find(x=>x["PARTY"]===name);
 
+let phone=p["PHONE"];
+
 let pay=num(p["Payment needed to Reactivate"]);
 let rec=num(p["Collections Current Month"]);
 let progress=pay?rec/pay*100:0;
@@ -218,7 +237,9 @@ p["AREA"]+"<br>"+
 <br><br>🔓 Unlock ₹${num(p["BALANCE"]).toLocaleString()}
 <br>💰 Pay ₹${pay.toLocaleString()}
 <div class="progressBox"><div class="progressBar" style="width:${progress}%;background:red"></div></div>
-`:"");
+`:"")+
+
+(phone?`<br><a class="callBtn" href="tel:${phone}">☎ Call</a>`:"");
 
 }
 
