@@ -3,43 +3,62 @@
 <head>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>AARADHYA TODAY</title>
+
 <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
 
 <style>
 body{font-family:Arial;margin:0;background:#f1f5f9}
+
 .header{background:#fff;padding:10px;border-bottom:1px solid #ddd;text-align:center;position:sticky;top:0}
+
 .card{background:#fff;margin:8px;padding:12px;border-radius:12px;border:1px solid #e2e8f0}
+
 .party{padding:10px;border-bottom:1px solid #eee;display:flex;justify-content:space-between;cursor:pointer}
+
 .active{border-left:5px solid #22c55e}
 .block{border-left:5px solid #ef4444;background:#fff1f2}
-.progressBox{height:6px;background:#e5e7eb;border-radius:10px;margin-top:6px}
-.progressBar{height:6px;border-radius:10px}
-.navBtn{display:inline-block;margin-top:8px;background:#2563eb;color:#fff;padding:6px 10px;border-radius:8px;text-decoration:none}
+
+.btn{
+display:inline-block;
+padding:6px 10px;
+border-radius:8px;
+margin:6px 4px 0 0;
+color:#fff;
+text-decoration:none;
+font-size:13px
+}
+
+.call{background:#16a34a}
+.wa{background:#25D366}
+.nav{background:#2563eb}
+
+.switch button{
+padding:6px 10px;
+margin:4px;
+border:none;
+border-radius:8px;
+cursor:pointer
+}
+.activeTab{background:#0f766e;color:#fff}
 </style>
 </head>
 
 <body>
 
 <div class="header">
+
 <select id="daySelect"></select>
+
+<div class="switch">
+<button id="planBtn" class="activeTab">Visit Plan</button>
+<button id="routeBtn">Today Route</button>
+</div>
+
 <div id="kpi"></div>
-<div class="progressBox"><div id="progressBar" class="progressBar"></div></div>
+
 </div>
 
-<div class="card" id="mission"></div>
-<div class="card" id="routeSummary"></div>
-<div class="card" id="quickStats"></div>
-
-<div class="card">
-<b>🧭 Visit Sequence Planner</b>
-<div id="visitPlan"></div>
-</div>
-
-<div class="card">
-<b>Today Route</b>
-<div id="count"></div>
-<div id="partyList"></div>
-</div>
+<div class="card" id="listContainer"></div>
 
 <div class="card" id="partyCard" style="display:none"></div>
 
@@ -61,60 +80,50 @@ Saturday:["PAIKMAL","MANDOSIL"]
 
 const daySelect=document.getElementById("daySelect");
 
-Object.keys(tourPlan).forEach(d=>{
-daySelect.innerHTML+=`<option>${d}</option>`;
-});
+Object.keys(tourPlan).forEach(d=>daySelect.innerHTML+=`<option>${d}</option>`);
 
 daySelect.value=new Date().toLocaleDateString("en-US",{weekday:"long"});
 
-const url="https://docs.google.com/spreadsheets/d/e/2PACX-1vQ3bMMFf71-vdGNiWFnf7pD9XuAAUSA7J-g08ocyC2LNiVOTUHi56lB-7bKTKj0KK9nJGs9vU0THQ0E/pub?gid=1044390124&single=true&output=csv";
-
 let sheetData=[];
+let viewMode="plan";
+
+const url="YOUR CSV LINK";
 
 function num(v){return Number(String(v||0).replace(/[^0-9.-]/g,""))||0;}
 
 function loadData(){
+
 Papa.parse(url,{download:true,header:true,skipEmptyLines:true,complete:function(res){
 sheetData=res.data;
 render();
 }});
+
+}
+
+function getDayData(){
+
+return sheetData.filter(r=>
+tourPlan[daySelect.value].includes((r["AREA"]||"").toUpperCase())
+);
+
 }
 
 function render(){
 
-let day=daySelect.value;
+let data=getDayData();
 
-let data=sheetData.filter(r=>
-tourPlan[day].includes((r["AREA"]||"").toUpperCase())
-);
-
-let fyBusiness=0,fyBalance=0;
-
-data.forEach(r=>{
-fyBusiness+=num(r["BUSINESS"]);
-fyBalance+=num(r["BALANCE"]);
-});
-
-let fyCollection=fyBusiness-fyBalance;
-let percent=(fyCollection/fyBusiness)*100;
-
-document.getElementById("kpi").innerHTML=
-"FY Business ₹"+fyBusiness.toLocaleString()+" | Collection ₹"+fyCollection.toLocaleString();
-
-let bar=document.getElementById("progressBar");
-bar.style.width=percent+"%";
-bar.style.background=percent<40?"red":percent<70?"orange":"green";
-
-renderVisitPlanner(data);
-renderPartyList(data);
+renderList(data);
 renderCreditList(data);
 
-document.getElementById("count").innerText=data.length+" Parties";
 }
 
-function renderVisitPlanner(data){
+function renderList(data){
 
-let sorted=[...data].sort((a,b)=>{
+let list=[...data];
+
+if(viewMode=="plan"){
+
+list.sort((a,b)=>{
 
 let aBlock=(a["ACCOUNT STATUS"]||"").toUpperCase()=="BLOCK";
 let bBlock=(b["ACCOUNT STATUS"]||"").toUpperCase()=="BLOCK";
@@ -125,76 +134,83 @@ if(!aBlock&&bBlock) return 1;
 return num(b["BALANCE"]) - num(a["BALANCE"]);
 });
 
-document.getElementById("visitPlan").innerHTML=
-sorted.map(p=>`
-<div class="party ${(p["ACCOUNT STATUS"]||"").toUpperCase()=="BLOCK"?"block":"active"}"
-onclick="showParty('${p["PARTY"]}')">
-${p["PARTY"]}<span>₹${num(p["BALANCE"]).toLocaleString()}</span>
-</div>
-`).join("");
 }
 
-function renderPartyList(data){
+document.getElementById("listContainer").innerHTML=
 
-document.getElementById("partyList").innerHTML=
-data.map(p=>`
+list.map(p=>`
 <div class="party ${(p["ACCOUNT STATUS"]||"").toUpperCase()=="BLOCK"?"block":"active"}"
 onclick="showParty('${p["PARTY"]}')">
-${p["PARTY"]}<span>₹${num(p["BALANCE"]).toLocaleString()}</span>
+
+${p["PARTY"]}
+<span>₹${num(p["BALANCE"]).toLocaleString()}</span>
+
 </div>
 `).join("");
+
 }
 
 function showParty(name){
 
 let p=sheetData.find(x=>x["PARTY"]===name);
 
-let lat=p["LAT"];
-let lng=p["LNG"];
-
-let mapLink=lat&&lng
-?`https://www.google.com/maps?q=${lat},${lng}`
-:`https://www.google.com/maps/search/${encodeURIComponent(p["PARTY"]+" "+p["AREA"])}`;
+let phone=p["PHONE"];
 
 let pay=num(p["Payment needed to Reactivate"]);
 let rec=num(p["Collections Current Month"]);
-let progress=pay?rec/pay*100:0;
 
 document.getElementById("partyCard").style.display="block";
 
-document.getElementById("partyCard").innerHTML=
-"<b>"+p["PARTY"]+"</b><br>"+
-p["AREA"]+"<br>"+
-"Balance ₹"+num(p["BALANCE"]).toLocaleString()+"<br>"+
-"MTD Business ₹"+num(p["BUSINESS CURRENT MONTH"]).toLocaleString()+"<br>"+
-"MTD Collection ₹"+rec.toLocaleString()+
-(pay?`
+document.getElementById("partyCard").innerHTML=`
+
+<b>${p["PARTY"]}</b><br>
+${p["AREA"]}<br><br>
+
+Balance ₹${num(p["BALANCE"]).toLocaleString()}<br>
+Credit Days ${p["AVG CREDIT CYCLE"]}<br>
+MTD Business ₹${num(p["BUSINESS CURRENT MONTH"]).toLocaleString()}<br>
+MTD Collection ₹${rec.toLocaleString()}
+
+${pay?`
 <br><br>🔓 Unlock ₹${num(p["BALANCE"]).toLocaleString()}
 <br>💰 Pay ₹${pay.toLocaleString()}
-<div class="progressBox"><div class="progressBar" style="width:${progress}%;background:red"></div></div>
-`:"")+
-`<br><a class="navBtn" href="${mapLink}" target="_blank">📍 Navigate</a>`;
+`:""}
+
+<br><br>
+
+<a class="btn call" href="tel:${phone}">☎ Call</a>
+<a class="btn wa" href="https://wa.me/91${phone}" target="_blank">💬 WhatsApp</a>
+
+`;
+
 }
 
 function renderCreditList(data){
 
 let list=data
 .filter(r=>num(r["AVG CREDIT CYCLE"])>45)
-.sort((a,b)=>num(b["AVG CREDIT CYCLE"]) - num(a["AVG CREDIT CYCLE"]));
+.sort((a,b)=>num(b["AVG CREDIT CYCLE"])-num(a["AVG CREDIT CYCLE"]));
 
 document.getElementById("creditList").innerHTML=
 list.map(p=>`
 <div class="party block" onclick="showParty('${p["PARTY"]}')">
+
 ${p["PARTY"]} – ${p["AVG CREDIT CYCLE"]} days
 <span>₹${num(p["BALANCE"]).toLocaleString()}</span>
+
 </div>
 `).join("");
+
 }
+
+planBtn.onclick=()=>{viewMode="plan";planBtn.classList.add("activeTab");routeBtn.classList.remove("activeTab");render();}
+routeBtn.onclick=()=>{viewMode="route";routeBtn.classList.add("activeTab");planBtn.classList.remove("activeTab");render();}
 
 daySelect.onchange=render;
 
 loadData();
 
 </script>
+
 </body>
 </html>
