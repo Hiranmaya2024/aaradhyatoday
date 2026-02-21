@@ -6,19 +6,47 @@
 <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
 
 <style>
+
 body{font-family:Arial;margin:0;background:#f1f5f9}
+
 .header{background:#fff;padding:10px;border-bottom:1px solid #ddd;text-align:center}
-.main{display:flex;height:calc(100vh - 150px)}
+
+.main{display:flex;height:calc(100vh - 170px)}
+
 .left{width:40%;overflow:auto;background:#fff}
 .right{width:60%;padding:10px;overflow:auto}
-.card{background:#fff;padding:10px;border-radius:10px;border:1px solid #e2e8f0;margin-bottom:10px}
+
+.card{background:#fff;padding:12px;border-radius:12px;border:1px solid #e2e8f0;margin-bottom:10px}
+
 .party{padding:10px;border-bottom:1px solid #eee;cursor:pointer}
-.block{border-left:4px solid red}
-.active{border-left:4px solid green}
-.btn{padding:6px 10px;border-radius:8px;color:#fff;border:none;margin:5px 5px 0 0}
-.call{background:#16a34a}.wa{background:#25D366}.nav{background:#2563eb}.start{background:#0f766e}
-iframe{width:100%;height:240px;border:0;border-radius:10px}
-@media(max-width:768px){.main{flex-direction:column;height:auto}.left,.right{width:100%}}
+
+.block{border-left:5px solid red}
+.active{border-left:5px solid green}
+
+.progressBar{
+height:10px;background:#e5e7eb;border-radius:10px;overflow:hidden;margin-top:6px
+}
+
+.progressFill{
+height:100%;background:#16a34a;width:0%
+}
+
+.btn{
+padding:8px 12px;border-radius:8px;border:none;color:#fff;margin:5px 5px 0 0
+}
+
+.stop{background:#f97316}
+.collect{background:#2563eb}
+.go{background:#16a34a}
+.disabled{background:#9ca3af}
+
+iframe{width:100%;height:230px;border:0;border-radius:10px}
+
+@media(max-width:768px){
+.main{flex-direction:column;height:auto}
+.left,.right{width:100%}
+}
+
 </style>
 </head>
 
@@ -27,7 +55,7 @@ iframe{width:100%;height:240px;border:0;border-radius:10px}
 <div class="header">
 <select id="daySelect"></select>
 <div id="dayArea"></div>
-<button class="btn start" onclick="startJourney()">Start Journey</button>
+<button class="btn stop" onclick="startJourney()">Start Journey</button>
 </div>
 
 <div class="main">
@@ -38,9 +66,13 @@ iframe{width:100%;height:240px;border:0;border-radius:10px}
 </div>
 
 <div class="right">
-<div class="card" id="aiBox">Start journey for AI</div>
+
+<div class="card" id="aiBox"></div>
+
 <div class="card" id="partyCard">Select a party</div>
+
 <div id="mapBox"></div>
+
 </div>
 
 </div>
@@ -61,7 +93,7 @@ Saturday:["PAIKMAL","MANDOSIL"]
 let data=[],today=[],route=[],visits=[];
 let userLat,userLng;
 
-let visitState={current:null,startTime:null,amount:0};
+let totalStops=0;
 
 const num=v=>Number(String(v||0).replace(/[^0-9.-]/g,""))||0;
 
@@ -71,15 +103,17 @@ return tourPlan[d]?d:"Monday";
 }
 
 function load(){
+
 Papa.parse(CSV,{
 download:true,
 header:true,
 skipEmptyLines:true,
 complete:res=>{
+
 data=res.data.map(r=>({
 party:r["PARTY"],
-area:(r["AREA"]||"").toUpperCase(),
-status:(r["ACCOUNT STATUS"]||"").toUpperCase(),
+area:r["AREA"],
+status:r["ACCOUNT STATUS"],
 balance:num(r["BALANCE"]),
 credit:num(r["AVG CREDIT CYCLE"]),
 phone:r["PHONE"],
@@ -88,8 +122,10 @@ lng:Number(r["LNG"]),
 reactivate:num(r["Payment needed to Reactivate"]),
 mtdB:num(r["BUSINESS CURRENT MONTH"]),
 mtdC:num(r["Collections Current Month"])
-})).filter(x=>x.party && x.area);
+})).filter(x=>x.party);
+
 init();
+
 }});
 }
 
@@ -103,27 +139,52 @@ render();
 function render(){
 
 let areas=tourPlan[daySelect.value];
-today=data.filter(x=>areas.includes(x.area));
 
-let b=0,c=0,r=0;
-today.forEach(x=>{b+=x.mtdB;c+=x.mtdC;r+=x.reactivate});
+today=data.filter(x=>areas.includes((x.area||"").toUpperCase()));
 
-summary.innerHTML=`📦 MTD Business ₹${b}<br>💰 MTD Collection ₹${c}<br>🎯 Recoverable ₹${r}`;
+renderSummary();
 
 partyList.innerHTML=today.map(p=>`
 <div class="party ${p.status==="BLOCK"?"block":"active"}" onclick="showParty('${p.party}')">
-${p.party}<br>₹${p.balance}
+${p.party}<br>₹${p.balance.toLocaleString()}
 </div>`).join("");
 
 }
 
+function renderSummary(){
+
+let collected=visits.reduce((a,b)=>a+b.amount,0);
+let recoverable=today.reduce((a,b)=>a+b.reactivate,0)-collected;
+
+let progress= totalStops ? (visits.length/totalStops)*100 : 0;
+
+summary.innerHTML=`
+💰 Collected ₹${collected.toLocaleString()}<br>
+🎯 Remaining ₹${recoverable.toLocaleString()}<br>
+📊 Route Progress ${progress.toFixed(0)}%
+<div class="progressBar"><div class="progressFill" style="width:${progress}%"></div></div>
+`;
+
+}
+
 function showParty(name){
-let p=today.find(x=>x.party===name);
+
+let p=data.find(x=>x.party===name);
+
 partyCard.innerHTML=`
-<b>${p.party}</b><br>
-<a class="btn call" href="tel:${p.phone}">Call</a>
-<a class="btn wa" href="https://wa.me/91${p.phone}">WhatsApp</a>
-<a class="btn nav" href="https://www.google.com/maps?q=${p.lat},${p.lng}" target="_blank">Navigate</a>`;
+<h3>${p.party}</h3>
+Area: ${p.area}<br>
+Status: ${p.status}<br>
+Outstanding: ₹${p.balance}<br>
+Credit: ${p.credit} days<br>
+MTD Business: ₹${p.mtdB}<br>
+MTD Collection: ₹${p.mtdC}<br><br>
+
+<a class="btn go" href="tel:${p.phone}">Call</a>
+<a class="btn collect" href="https://wa.me/91${p.phone}">WhatsApp</a>
+<a class="btn stop" href="https://www.google.com/maps?q=${p.lat},${p.lng}" target="_blank">Navigate</a>
+`;
+
 }
 
 function distance(a,b,c,d){
@@ -137,69 +198,54 @@ return R*(2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x)));
 }
 
 function startJourney(){
+
 navigator.geolocation.getCurrentPosition(pos=>{
+
 userLat=pos.coords.latitude;
 userLng=pos.coords.longitude;
 
-let stops=today.filter(p=>p.lat && p.lng);
+route=today.filter(p=>p.lat && p.lng);
+totalStops=route.length;
 
-let remaining=[...stops];
-route=[];
-
-let clat=userLat,clng=userLng;
-
-while(remaining.length){
-let nearest=remaining.reduce((a,b)=>distance(clat,clng,a.lat,a.lng)<distance(clat,clng,b.lat,b.lng)?a:b);
-route.push(nearest);
-clat=nearest.lat;
-clng=nearest.lng;
-remaining=remaining.filter(x=>x!==nearest);
-}
-
-drawMap();
 nextVisit();
+drawMap();
 
 });
-}
 
-function drawMap(){
-
-let navURL="https://www.google.com/maps/dir/?api=1&origin="+userLat+","+userLng+
-"&destination="+route.at(-1).lat+","+route.at(-1).lng+
-"&waypoints="+route.map(p=>p.lat+","+p.lng).join("|");
-
-let preview=`https://www.google.com/maps?q=${route[0].lat},${route[0].lng}&output=embed`;
-
-mapBox.innerHTML=`<iframe src="${preview}"></iframe>
-<a class="btn nav" href="${navURL}" target="_blank">Open Full Route</a>`;
 }
 
 function nextVisit(){
 
+if(!route.length){
+aiBox.innerHTML="✅ Route Completed";
+renderSummary();
+return;
+}
+
 let p=route[0];
 
 aiBox.innerHTML=`
-<b>${p.party}</b><br>
+<h3>${p.party}</h3>
 ₹${p.balance} || ${p.credit} days || ${distance(userLat,userLng,p.lat,p.lng).toFixed(1)} km<br><br>
 
-<button class="btn start" onclick="startVisit()">STOP</button>
-<button class="btn" id="collectBtn" disabled onclick="collect()">COLLECT</button>
-<button class="btn nav" id="goBtn" disabled onclick="endVisit()">GO</button>
+<button class="btn stop" onclick="startVisit()">STOP</button>
+<button class="btn collect disabled" id="collectBtn" onclick="collect()">COLLECT</button>
+<button class="btn go disabled" id="goBtn" onclick="endVisit()">GO</button>
 `;
 
-visitState.current=p;
+visitState={current:p,startTime:null,amount:0};
 
 }
 
 function startVisit(){
 visitState.startTime=new Date();
-collectBtn.disabled=false;
+collectBtn.classList.remove("disabled");
 }
 
 function collect(){
-let amt=prompt("Enter amount");
-visitState.amount=Number(amt||0);
-goBtn.disabled=false;
+let amt=prompt("Enter collection amount");
+visitState.amount=num(amt);
+goBtn.classList.remove("disabled");
 }
 
 function endVisit(){
@@ -209,13 +255,21 @@ let end=new Date();
 visits.push({
 party:visitState.current.party,
 amount:visitState.amount,
-duration:Math.round((end-visitState.startTime)/1000)
+duration:(end-visitState.startTime)/1000
 });
 
 route.shift();
 
-if(route.length) nextVisit();
-else aiBox.innerHTML="Route completed ✅";
+renderSummary();
+nextVisit();
+
+}
+
+function drawMap(){
+
+let preview=`https://www.google.com/maps?q=${route[0].lat},${route[0].lng}&output=embed`;
+
+mapBox.innerHTML=`<iframe src="${preview}"></iframe>`;
 
 }
 
