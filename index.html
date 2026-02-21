@@ -9,7 +9,7 @@
 *{box-sizing:border-box}
 
 body{
-font-family:Inter,system-ui,Arial;
+font-family:Inter,Arial;
 margin:0;
 background:#f8fafc;
 color:#0f172a;
@@ -27,8 +27,7 @@ border-bottom:1px solid #e2e8f0;
 z-index:1000;
 }
 
-#tourArea{font-size:11px;color:#64748b;margin-top:2px}
-
+#tourArea{font-size:11px;color:#64748b}
 .kpiBar{font-size:13px;font-weight:700;margin-top:2px}
 
 .progressBox{
@@ -44,7 +43,7 @@ max-width:180px;
 /* LAYOUT */
 
 .container{padding:8px;max-width:1000px;margin:auto}
-.dashboard-grid{display:grid;gap:8px;grid-template-columns:1fr}
+.dashboard-grid{display:grid;gap:8px}
 
 /* CARDS */
 
@@ -55,8 +54,6 @@ border-radius:12px;
 border:1px solid #e2e8f0;
 }
 
-/* MISSION */
-
 .missionCard{
 background:#0f766e;
 color:white;
@@ -65,10 +62,9 @@ padding:12px;
 border-radius:12px;
 font-size:16px;
 font-weight:700;
-line-height:1.4;
 }
 
-/* ROUTE MICRO TILES */
+/* MICRO STATS */
 
 .statGrid{
 display:grid;
@@ -84,7 +80,7 @@ border-radius:8px;
 text-align:center;
 }
 
-.statBox b{display:block;font-size:13px}
+.statBox b{font-size:13px;display:block}
 .statBox span{font-size:10px;color:#64748b}
 
 /* PARTY LIST */
@@ -101,14 +97,13 @@ justify-content:space-between;
 align-items:center;
 border:1px solid #e2e8f0;
 cursor:pointer;
+transition:0.25s;
 }
 
 .partyItem.active{border-left:3px solid #22c55e}
 .partyItem.block{border-left:3px solid #ef4444;background:#fff1f2}
 
 /* PARTY DETAIL */
-
-#partyCard{margin-top:6px}
 
 .blockCard{
 border:1px solid #ef4444;
@@ -195,6 +190,8 @@ AARADHYA • <span id="tourArea"></span>
 const sheetURL="https://docs.google.com/spreadsheets/d/e/2PACX-1vQ3bMMFf71-vdGNiWFnf7pD9XuAAUSA7J-g08ocyC2LNiVOTUHi56lB-7bKTKj0KK9nJGs9vU0THQ0E/pub?gid=1044390124&single=true&output=csv";
 
 let COL={},sheetData=[];
+let visitIndex=-1;
+let orderedTodayList=[];
 
 const tourPlan={
 Monday:["JURIA"],Tuesday:["GHESS"],Wednesday:["GAISILATE"],
@@ -223,7 +220,6 @@ const col=n=>columns.find(c=>normalize(c).includes(n));
 COL={
 PARTY:col("party"),AREA:col("area"),STATUS:col("accountstatus"),
 BUSINESS:col("business"),BALANCE:col("balance"),
-BUSINESS_MTD:col("businesscurrentmonth"),
 COLLECTION_MTD:col("collectionscurrentmonth"),
 CREDIT:col("avgcreditcycle"),
 REACTIVATE:col("paymentneededtoreactivate")
@@ -286,11 +282,19 @@ document.getElementById("reactivationSummary").innerHTML=`
 <div class="statBox"><b>₹${Math.round(unlockBusiness).toLocaleString()}</b><span>UNL</span></div>
 </div>`;
 
-document.getElementById("todayCount").innerText=`${todayList.length} Parties`;
+orderedTodayList=[...todayList].sort((a,b)=>{
+if(a.status==="BLOCK" && b.status!=="BLOCK") return -1;
+if(a.status!=="BLOCK" && b.status==="BLOCK") return 1;
+return b.balance-a.balance;
+});
+
+document.getElementById("todayCount").innerText=`${orderedTodayList.length} Parties`;
 
 document.getElementById("todayParties").innerHTML=
-todayList.map(p=>`
-<li class="partyItem ${p.status==="ACTIVE"?"active":p.status==="BLOCK"?"block":""}" onclick="showParty('${p.name}')">
+orderedTodayList.map((p,i)=>`
+<li id="partyRow${i}" 
+class="partyItem ${p.status==="ACTIVE"?"active":p.status==="BLOCK"?"block":""}"
+onclick="showParty('${p.name}',${i})">
 ${p.name}
 <span>₹${p.balance.toLocaleString()}</span>
 </li>`).join("");
@@ -304,7 +308,9 @@ creditList.map(c=>`<li class="partyItem">${c.name}<span>${c.credit}d</span></li>
 });
 }
 
-function showParty(name){
+function showParty(name,index){
+
+visitIndex=index;
 
 let party=sheetData.find(r=>r[COL.PARTY]===name);
 if(!party)return;
@@ -336,6 +342,34 @@ ${isBlock?`
 
 Bal ₹${balance.toLocaleString()} | MTD ₹${recovered.toLocaleString()}
 `;
+
+markVisitedAndFocusNext();
+}
+
+function markVisitedAndFocusNext(){
+
+let currentRow=document.getElementById("partyRow"+visitIndex);
+if(currentRow){
+currentRow.style.opacity="0.4";
+currentRow.style.textDecoration="line-through";
+}
+
+let nextIndex=visitIndex+1;
+
+if(nextIndex<orderedTodayList.length){
+
+let nextRow=document.getElementById("partyRow"+nextIndex);
+
+nextRow.scrollIntoView({behavior:"smooth",block:"center"});
+
+nextRow.style.background="#fef9c3";
+
+setTimeout(()=>{
+nextRow.style.background="";
+},1200);
+
+visitIndex=nextIndex;
+}
 }
 
 loadData();
