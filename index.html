@@ -6,285 +6,155 @@
 <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
 
 <style>
-*{box-sizing:border-box}
-body{font-family:Inter,Arial;margin:0;background:#f8fafc;color:#0f172a}
-
-.header{position:sticky;top:0;background:#fff;padding:10px;border-bottom:1px solid #e2e8f0;text-align:center}
-#tourArea{font-size:11px;color:#64748b}
-.kpiBar{font-size:13px;font-weight:700}
-.progressBox{background:#e2e8f0;height:4px;border-radius:10px;margin:5px auto;width:180px}
-#progressBar{height:4px;border-radius:10px}
-
-.container{padding:8px;max-width:1000px;margin:auto}
-.card{background:#fff;padding:10px;border-radius:12px;border:1px solid #e2e8f0;margin-bottom:8px}
-
-.missionCard{background:#0f766e;color:#fff;text-align:center;padding:12px;border-radius:12px;font-weight:700}
-
-.statGrid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
-.statBox{background:#f1f5f9;padding:6px;border-radius:8px;text-align:center;font-size:11px}
-
-.partyItem{background:#fff;padding:10px;border-radius:10px;margin-bottom:6px;border:1px solid #e2e8f0;display:flex;justify-content:space-between;cursor:pointer}
-.partyItem.active{border-left:3px solid #22c55e}
-.partyItem.block{border-left:3px solid #ef4444;background:#fff1f2}
-
-.blockCard{border:1px solid #ef4444;background:#fff1f2}
-.unlockBox{background:#16a34a;color:#fff;padding:8px;border-radius:8px;text-align:center;margin:6px 0}
-.payBox{background:#ef4444;color:#fff;padding:8px;border-radius:8px;text-align:center;margin:6px 0}
-
-.recoveryBarBg{background:#e2e8f0;height:6px;border-radius:10px}
-.recoveryBar{height:6px;background:#ef4444;border-radius:10px}
+body{font-family:Arial;margin:0;background:#f8fafc}
+.header{position:sticky;top:0;background:#fff;padding:10px;border-bottom:1px solid #ddd;text-align:center}
+.card{background:#fff;margin:8px;padding:10px;border-radius:10px;border:1px solid #e2e8f0}
+.partyItem{padding:10px;border-bottom:1px solid #eee;display:flex;justify-content:space-between;cursor:pointer}
+.partyItem.block{border-left:4px solid red;background:#fff1f2}
+.partyItem.active{border-left:4px solid green}
+.missionCard{background:#0f766e;color:#fff;text-align:center;font-weight:bold}
 </style>
 </head>
 
 <body>
 
 <div class="header">
-AARADHYA • <span id="tourArea"></span>
-<div class="kpiBar" id="fyKPI"></div>
-<div class="progressBox"><div id="progressBar"></div></div>
+AARADHYA TODAY
+<div id="kpi"></div>
 </div>
 
-<div class="container">
-
-<div class="missionCard" id="smartRecovery"></div>
-
-<div class="card"><div id="reactivationSummary"></div></div>
+<div class="card missionCard" id="mission"></div>
 
 <div class="card">
-<b>Today’s Route</b>
-<div id="todayCount"></div>
-<ul id="todayParties"></ul>
+<b>Today Route</b>
+<div id="count"></div>
+<div id="list"></div>
 </div>
 
-<div class="card" id="partyCard" style="display:none;">
-<div id="partyDetails"></div>
-</div>
-
-<div class="card">
-<b>Credit Cycle > 45</b>
-<div id="creditCount"></div>
-<ul id="creditExceeded"></ul>
-</div>
-
-</div>
+<div class="card" id="details" style="display:none"></div>
 
 <script>
 
-const sheetURL="YOUR_CSV_LINK_HERE";
+const sheetURL="https://docs.google.com/spreadsheets/d/e/2PACX-1vQ3bMMFf71-vdGNiWFnf7pD9XuAAUSA7J-g08ocyC2LNiVOTUHi56lB-7bKTKj0KK9nJGs9vU0THQ0E/pub?gid=1044390124&single=true&output=csv";
 
-let COL={},sheetData=[];
-let visitedParties=new Set();
-let dynamicTodayList=[];
-let orderedTodayList=[];
-let routeTarget=0,routeRecovered=0;
-let firstVisitTime=null,lastVisitTime=null;
-let userLat=null,userLng=null;
-let delayRisk=false;
+let data=[],visited=new Set(),routeTarget=0,routeRecovered=0;
+let firstVisit=null,lastVisit=null;
 
-const routeDeadlineHour=18,routeDeadlineMinute=30;
-
-function cleanNumber(v){return Number(String(v||0).replace(/[^0-9.-]/g,""))||0;}
-function normalize(t){return t.toLowerCase().replace(/[^a-z]/g,"");}
-
-function getDistance(lat1,lon1,lat2,lon2){
-function toRad(x){return x*Math.PI/180;}
-let R=6371;
-let dLat=toRad(lat2-lat1);
-let dLon=toRad(lon2-lon1);
-let a=Math.sin(dLat/2)**2+Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)**2;
-return R*(2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a)));
-}
+function clean(v){return Number(String(v||0).replace(/[^0-9.-]/g,""))||0;}
 
 function loadData(){
 
-visitedParties.clear();
-routeRecovered=0;
-firstVisitTime=null;
-lastVisitTime=null;
+Papa.parse(sheetURL,{
+download:true,
+header:true,
+skipEmptyLines:true,
 
-navigator.geolocation?.getCurrentPosition(pos=>{
-userLat=pos.coords.latitude;
-userLng=pos.coords.longitude;
-});
+complete:function(res){
 
-Papa.parse(sheetURL,{download:true,header:true,skipEmptyLines:true,complete:function(res){
-
-sheetData=res.data;
-
-const columns=Object.keys(sheetData[0]);
-const col=n=>columns.find(c=>normalize(c).includes(n));
-
-COL={
-PARTY:col("party"),AREA:col("area"),STATUS:col("accountstatus"),
-BUSINESS:col("business"),BALANCE:col("balance"),
-COLLECTION_MTD:col("collectionscurrentmonth"),
-CREDIT:col("avgcreditcycle"),
-REACTIVATE:col("paymentneededtoreactivate"),
-LAT:col("lat"),LNG:col("lng")
-};
+data=res.data;
 
 let fyBusiness=0,fyBalance=0,tourBalance=0;
-let blockCount=0,totalReactivate=0,unlockBusiness=0;
+let todayList=[];
 
-let todayList=[],creditList=[];
+data.forEach(r=>{
 
-sheetData.forEach(r=>{
-let status=(r[COL.STATUS]||"").toUpperCase();
-
-fyBusiness+=cleanNumber(r[COL.BUSINESS]);
-fyBalance+=cleanNumber(r[COL.BALANCE]);
+fyBusiness+=clean(r["BUSINESS"]);
+fyBalance+=clean(r["BALANCE"]);
 
 todayList.push({
-name:r[COL.PARTY],
-balance:cleanNumber(r[COL.BALANCE]),
-status,
-lat:parseFloat(r[COL.LAT]),
-lng:parseFloat(r[COL.LNG])
+name:r["PARTY"],
+balance:clean(r["BALANCE"]),
+status:(r["ACCOUNT STATUS"]||"").toUpperCase(),
+collection:clean(r["Collections Current Month"])
 });
 
-if(status==="BLOCK"){
-blockCount++;
-totalReactivate+=cleanNumber(r[COL.REACTIVATE]);
-unlockBusiness+=cleanNumber(r[COL.BUSINESS]);
-}
-
-if(cleanNumber(r[COL.CREDIT])>45){
-creditList.push({name:r[COL.PARTY],credit:r[COL.CREDIT]});
-}
-
-tourBalance+=cleanNumber(r[COL.BALANCE]);
+tourBalance+=clean(r["BALANCE"]);
 
 });
 
-routeTarget=Math.round(tourBalance*0.30);
+routeTarget=Math.round(tourBalance*0.3);
 
-let fyCollection=fyBusiness-fyBalance;
-let percent=(fyCollection/fyBusiness)*100;
+document.getElementById("kpi").innerHTML=
+"FY Collection ₹"+(fyBusiness-fyBalance).toLocaleString();
 
-document.getElementById("fyKPI").innerHTML=
-`₹${Math.round(fyBusiness).toLocaleString()} | ₹${Math.round(fyCollection).toLocaleString()} | ${percent.toFixed(0)}%`;
-
-document.getElementById("progressBar").style.width=percent+"%";
-
-dynamicTodayList=todayList;
-renderRouteList();
-
-document.getElementById("creditCount").innerText=creditList.length;
-
-}});
+renderList(todayList);
+updateMission(todayList.length);
 
 }
 
-function renderRouteList(){
+});
+}
 
-let remaining=dynamicTodayList.filter(p=>!visitedParties.has(p.name));
+function renderList(list){
 
-let sorted=remaining.sort((a,b)=>{
-
-let distA=userLat&&a.lat?getDistance(userLat,userLng,a.lat,a.lng):9999;
-let distB=userLat&&b.lat?getDistance(userLat,userLng,b.lat,b.lng):9999;
-
+list.sort((a,b)=>{
 if(a.status==="BLOCK"&&b.status!=="BLOCK")return-1;
 if(a.status!=="BLOCK"&&b.status==="BLOCK")return 1;
-
-return distA-distB||b.balance-a.balance;
+return b.balance-a.balance;
 });
 
-orderedTodayList=sorted;
+document.getElementById("count").innerText=list.length+" Parties";
 
-document.getElementById("todayCount").innerText=orderedTodayList.length+" Parties";
-
-document.getElementById("todayParties").innerHTML=
-orderedTodayList.map((p,i)=>`
-<li class="partyItem ${p.status==="ACTIVE"?"active":p.status==="BLOCK"?"block":""}"
-onclick="visitParty('${p.name}')">
+document.getElementById("list").innerHTML=
+list.map(p=>`
+<div class="partyItem ${p.status==="BLOCK"?"block":"active"}"
+onclick="visit('${p.name}',${p.collection})">
 ${p.name}
 <span>₹${p.balance.toLocaleString()}</span>
-</li>`).join("");
+</div>
+`).join("");
 
-updateRouteTracker();
 }
 
-function visitParty(name){
+function visit(name,collection){
 
-let party=sheetData.find(r=>r[COL.PARTY]===name);
+if(!firstVisit)firstVisit=new Date();
+lastVisit=new Date();
 
-let now=new Date();
-if(!firstVisitTime)firstVisitTime=now;
-lastVisitTime=now;
+visited.add(name);
+routeRecovered+=collection;
 
-visitedParties.add(name);
-routeRecovered+=cleanNumber(party[COL.COLLECTION_MTD]);
+showDetails(name);
+updateMission(data.length);
 
-navigator.geolocation?.getCurrentPosition(pos=>{
-userLat=pos.coords.latitude;
-userLng=pos.coords.longitude;
-renderRouteList();
-focusNext();
-updateRouteTracker();
-});
-
-showPartyDetails(party);
 }
 
-function focusNext(){
-setTimeout(()=>{
-document.querySelector("#todayParties li")?.scrollIntoView({behavior:"smooth",block:"center"});
-},300);
+function showDetails(name){
+
+let p=data.find(x=>x["PARTY"]===name);
+
+document.getElementById("details").style.display="block";
+document.getElementById("details").innerHTML=
+"<b>"+name+"</b><br>Balance ₹"+clean(p["BALANCE"]).toLocaleString();
+
 }
 
-function showPartyDetails(party){
+function updateMission(total){
 
-let balance=cleanNumber(party[COL.BALANCE]);
-let target=cleanNumber(party[COL.REACTIVATE]);
-let recovered=cleanNumber(party[COL.COLLECTION_MTD]);
-let progress=target?((recovered/target)*100):0;
+let done=visited.size;
 
-document.getElementById("partyCard").style.display="block";
+let percent=Math.round(done/total*100);
 
-document.getElementById("partyDetails").innerHTML=`
-<b>${party[COL.PARTY]}</b><br>${party[COL.AREA]}<br>
-<div class="unlockBox">Unlock ₹${balance.toLocaleString()}</div>
-<div class="payBox">Pay ₹${(target-recovered).toLocaleString()}</div>
-<div class="recoveryBarBg"><div class="recoveryBar" style="width:${progress}%"></div></div>
-`;
-}
-
-function updateRouteTracker(){
-
-let total=dynamicTodayList.length;
-let done=visitedParties.size;
-let percent=total?Math.round((done/total)*100):0;
-
-let finishText="⏱ Calculating…";
-let warningText="";
+let finish="Calculating…";
 
 if(done>1){
 
-let avg=(lastVisitTime-firstVisitTime)/(done-1);
-let remaining=total-done;
+let avg=(lastVisit-firstVisit)/(done-1);
+let remain=total-done;
+let finishTime=new Date(Date.now()+remain*avg);
 
-let finishTime=new Date(Date.now()+remaining*avg);
-
-finishText="⏱ Finish by "+finishTime.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
-
-let deadline=new Date();
-deadline.setHours(routeDeadlineHour,routeDeadlineMinute,0,0);
-
-delayRisk=finishTime>deadline;
-
-warningText=delayRisk?"🚨 Delay risk":"✅ On track";
+finish=finishTime.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
 }
 
-document.getElementById("smartRecovery").innerHTML=
-`TODAY<br>Collect ₹${routeTarget.toLocaleString()}<br>
-Recovery ₹${Math.round(routeRecovered).toLocaleString()}<br>
-Route ${done}/${total} • ${percent}%<br>
-${finishText}<br>${warningText}`;
+document.getElementById("mission").innerHTML=
+"Collect ₹"+routeTarget.toLocaleString()+"<br>"+
+"Recovery ₹"+routeRecovered.toLocaleString()+"<br>"+
+"Route "+done+"/"+total+" • "+percent+"%<br>"+
+"Finish "+finish;
+
 }
 
 loadData();
-setInterval(loadData,120000);
 
 </script>
 </body>
