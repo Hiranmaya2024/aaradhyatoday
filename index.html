@@ -12,6 +12,7 @@ body{font-family:Arial;margin:0;background:#f8fafc}
 .partyItem{padding:10px;border-bottom:1px solid #eee;display:flex;justify-content:space-between;cursor:pointer}
 .partyItem.block{border-left:4px solid red;background:#fff1f2}
 .partyItem.active{border-left:4px solid green}
+.visited{opacity:0.4;text-decoration:line-through}
 .missionCard{background:#0f766e;color:#fff;text-align:center;font-weight:bold}
 </style>
 </head>
@@ -37,18 +38,19 @@ AARADHYA TODAY
 
 const sheetURL="https://docs.google.com/spreadsheets/d/e/2PACX-1vQ3bMMFf71-vdGNiWFnf7pD9XuAAUSA7J-g08ocyC2LNiVOTUHi56lB-7bKTKj0KK9nJGs9vU0THQ0E/pub?gid=1044390124&single=true&output=csv";
 
-let data=[],visited=new Set(),routeTarget=0,routeRecovered=0;
+let data=[],visited=new Set();
+let routeTarget=0,routeRecovered=0;
 let firstVisit=null,lastVisit=null;
+
+const deadlineHour=18;
+const deadlineMinute=30;
 
 function clean(v){return Number(String(v||0).replace(/[^0-9.-]/g,""))||0;}
 
 function loadData(){
 
 Papa.parse(sheetURL,{
-download:true,
-header:true,
-skipEmptyLines:true,
-
+download:true,header:true,skipEmptyLines:true,
 complete:function(res){
 
 data=res.data;
@@ -81,7 +83,6 @@ renderList(todayList);
 updateMission(todayList.length);
 
 }
-
 });
 }
 
@@ -97,13 +98,13 @@ document.getElementById("count").innerText=list.length+" Parties";
 
 document.getElementById("list").innerHTML=
 list.map(p=>`
-<div class="partyItem ${p.status==="BLOCK"?"block":"active"}"
+<div id="row_${p.name}"
+class="partyItem ${p.status==="BLOCK"?"block":"active"}"
 onclick="visit('${p.name}',${p.collection})">
 ${p.name}
 <span>₹${p.balance.toLocaleString()}</span>
 </div>
 `).join("");
-
 }
 
 function visit(name,collection){
@@ -114,9 +115,10 @@ lastVisit=new Date();
 visited.add(name);
 routeRecovered+=collection;
 
+document.getElementById("row_"+name)?.classList.add("visited");
+
 showDetails(name);
 updateMission(data.length);
-
 }
 
 function showDetails(name){
@@ -126,32 +128,42 @@ let p=data.find(x=>x["PARTY"]===name);
 document.getElementById("details").style.display="block";
 document.getElementById("details").innerHTML=
 "<b>"+name+"</b><br>Balance ₹"+clean(p["BALANCE"]).toLocaleString();
-
 }
 
 function updateMission(total){
 
 let done=visited.size;
-
 let percent=Math.round(done/total*100);
 
-let finish="Calculating…";
+let finishText="⏱ Calculating…";
+let statusText="";
 
 if(done>1){
 
 let avg=(lastVisit-firstVisit)/(done-1);
 let remain=total-done;
+
 let finishTime=new Date(Date.now()+remain*avg);
 
-finish=finishTime.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+finishText="⏱ Finish by "+finishTime.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+
+let deadline=new Date();
+deadline.setHours(deadlineHour,deadlineMinute,0,0);
+
+if(finishTime>deadline){
+statusText="🚨 Delay risk";
+}else{
+let fastTrack=new Date();
+fastTrack.setHours(17,30,0,0);
+statusText=finishTime<fastTrack?"🔥 Fast pace":"✅ On track";
+}
 }
 
 document.getElementById("mission").innerHTML=
-"Collect ₹"+routeTarget.toLocaleString()+"<br>"+
-"Recovery ₹"+routeRecovered.toLocaleString()+"<br>"+
+"Target ₹"+routeTarget.toLocaleString()+"<br>"+
+"Done ₹"+routeRecovered.toLocaleString()+"<br>"+
 "Route "+done+"/"+total+" • "+percent+"%<br>"+
-"Finish "+finish;
-
+finishText+"<br>"+statusText;
 }
 
 loadData();
