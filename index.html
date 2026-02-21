@@ -7,78 +7,75 @@
 
 <style>
 body{font-family:Arial;margin:0;background:#f1f5f9}
-
 .header{position:sticky;top:0;background:#fff;padding:10px;border-bottom:1px solid #ddd;text-align:center}
-
-.progressBox{height:6px;background:#e5e7eb;border-radius:10px;margin-top:6px}
-.progressBar{height:6px;border-radius:10px}
-
 .card{background:#fff;margin:8px;padding:10px;border-radius:12px;border:1px solid #e2e8f0}
-
-.mission{background:#0f766e;color:#fff;text-align:center;font-weight:bold}
-
 .party{padding:10px;border-bottom:1px solid #eee;display:flex;justify-content:space-between;cursor:pointer}
 .active{border-left:5px solid #22c55e}
 .block{border-left:5px solid #ef4444;background:#fff1f2}
-
-.visited{opacity:0.4;text-decoration:line-through}
+.progressBox{height:6px;background:#e5e7eb;border-radius:10px;margin-top:6px}
+.progressBar{height:6px;border-radius:10px}
 </style>
 </head>
 
 <body>
 
 <div class="header">
+<div id="day"></div>
 <div id="kpi"></div>
 <div class="progressBox"><div id="progressBar" class="progressBar"></div></div>
 </div>
 
-<div class="card mission" id="mission"></div>
-
+<div class="card" id="mission"></div>
 <div class="card" id="routeSummary"></div>
-
 <div class="card" id="quickStats"></div>
 
 <div class="card">
 <b>Today Route</b>
-<div id="todayCount"></div>
+<div id="count"></div>
 <div id="partyList"></div>
 </div>
 
-<div class="card" id="partyCard" style="display:none"></div>
-
-<div class="card">
-<b>Credit Cycle > 45</b>
-<div id="creditList"></div>
-</div>
+<div class="card" id="creditList"></div>
 
 <script>
 
-const url="https://docs.google.com/spreadsheets/d/e/2PACX-1vQ3bMMFf71-vdGNiWFnf7pD9XuAAUSA7J-g08ocyC2LNiVOTUHi56lB-7bKTKj0KK9nJGs9vU0THQ0E/pub?gid=1044390124&single=true&output=csv";
+const tourPlan={
+Monday:["JURIA"],
+Tuesday:["GHESS"],
+Wednesday:["GAISILATE"],
+Thursday:["JHARBANDH"],
+Friday:["PADAMPUR"],
+Saturday:["PAIKMAL","MANDOSIL"]
+};
 
-let data=[],visited=new Set();
-let routeRecovered=0,routeTarget=0;
-let firstVisit=null,lastVisit=null;
+const today=new Date().toLocaleDateString("en-US",{weekday:"long"});
+document.getElementById("day").innerText=today+" → "+tourPlan[today].join(", ");
 
 function num(v){return Number(String(v||0).replace(/[^0-9.-]/g,""))||0;}
 
+const url="https://docs.google.com/spreadsheets/d/e/2PACX-1vQ3bMMFf71-vdGNiWFnf7pD9XuAAUSA7J-g08ocyC2LNiVOTUHi56lB-7bKTKj0KK9nJGs9vU0THQ0E/pub?gid=1044390124&single=true&output=csv";
+
 Papa.parse(url,{download:true,header:true,skipEmptyLines:true,complete:function(res){
 
-data=res.data;
+let data=res.data;
 
 let fyBusiness=0,fyBalance=0;
-let block=0,active=0;
-let unlock=0,reactivate=0;
-let totalBusiness=0,totalCollection=0;
 
-let todayList=[],creditList=[];
+let todayData=data.filter(r=>
+tourPlan[today].includes((r["AREA"]||"").toUpperCase())
+);
 
-data.forEach(r=>{
+let block=0,active=0,unlock=0,reactivate=0;
+let todayBusiness=0,todayCollection=0;
+let creditList=[];
+
+todayData.forEach(r=>{
 
 fyBusiness+=num(r["BUSINESS"]);
 fyBalance+=num(r["BALANCE"]);
 
-totalBusiness+=num(r["BUSINESS CURRENT MONTH"]);
-totalCollection+=num(r["Collections Current Month"]);
+todayBusiness+=num(r["BUSINESS CURRENT MONTH"]);
+todayCollection+=num(r["Collections Current Month"]);
 
 if((r["ACCOUNT STATUS"]||"").toUpperCase()=="BLOCK"){
 block++;
@@ -89,8 +86,6 @@ reactivate+=num(r["Payment needed to Reactivate"]);
 if(num(r["AVG CREDIT CYCLE"])>45){
 creditList.push(r["PARTY"]);
 }
-
-todayList.push(r);
 
 });
 
@@ -104,59 +99,32 @@ let bar=document.getElementById("progressBar");
 bar.style.width=percent+"%";
 bar.style.background=percent<40?"red":percent<70?"orange":"green";
 
-routeTarget=Math.round(fyBalance*0.3);
+let target=Math.round(fyBalance*0.3);
 
 document.getElementById("mission").innerHTML=
-"Today Target ₹"+routeTarget.toLocaleString()+"<br>Recovery ₹"+routeRecovered.toLocaleString();
+"Today Target ₹"+target.toLocaleString()+"<br>Today Collection ₹"+todayCollection.toLocaleString();
 
 document.getElementById("routeSummary").innerHTML=
 "Blocked "+block+" | Active "+active+"<br>Unlock ₹"+unlock.toLocaleString()+" | Target ₹"+reactivate.toLocaleString();
 
 document.getElementById("quickStats").innerHTML=
-"Business ₹"+totalBusiness.toLocaleString()+" | Collection ₹"+totalCollection.toLocaleString();
+"Today Business ₹"+todayBusiness.toLocaleString()+" | Today Collection ₹"+todayCollection.toLocaleString();
 
-renderList(todayList);
-
-document.getElementById("creditList").innerHTML=creditList.join("<br>");
-
-}});
-
-function renderList(list){
-
-document.getElementById("todayCount").innerText=list.length+" Parties";
+document.getElementById("count").innerText=todayData.length+" Parties";
 
 document.getElementById("partyList").innerHTML=
-list.map((p,i)=>`
-<div id="row${i}" class="party ${(p["ACCOUNT STATUS"]||"").toUpperCase()=="BLOCK"?"block":"active"}"
-onclick="visit(${i})">
-${p["PARTY"]}<span>₹${num(p["BALANCE"]).toLocaleString()}</span>
-</div>`).join("");
+todayData.map(p=>`
+<div class="party ${(p["ACCOUNT STATUS"]||"").toUpperCase()=="BLOCK"?"block":"active"}">
+${p["PARTY"]}
+<span>₹${num(p["BALANCE"]).toLocaleString()}</span>
+</div>
+`).join("");
 
-}
+document.getElementById("creditList").innerHTML=
+"<b>Credit Cycle > 45</b><br>"+creditList.join("<br>");
 
-function visit(i){
-
-let p=data[i];
-
-visited.add(i);
-routeRecovered+=num(p["Collections Current Month"]);
-
-document.getElementById("row"+i).classList.add("visited");
-
-document.getElementById("partyCard").style.display="block";
-
-let pay=num(p["Payment needed to Reactivate"]);
-let rec=num(p["Collections Current Month"]);
-let progress=pay?rec/pay*100:0;
-
-document.getElementById("partyCard").innerHTML=
-"<b>"+p["PARTY"]+"</b><br>"+
-"Unlock ₹"+num(p["BALANCE"]).toLocaleString()+"<br>"+
-"Pay ₹"+pay.toLocaleString()+"<br>"+
-"<div class='progressBox'><div class='progressBar' style='width:"+progress+"%;background:red'></div></div>";
-
-}
-
+}});
 </script>
+
 </body>
 </html>
