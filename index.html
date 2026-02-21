@@ -3,20 +3,89 @@
 <head>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>AARADHYA TODAY</title>
+
 <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
 
 <style>
-body{font-family:Arial;margin:0;background:#f1f5f9}
-.header{background:#fff;padding:10px;border-bottom:1px solid #ddd;text-align:center;position:sticky;top:0}
-.card{background:#fff;margin:8px;padding:12px;border-radius:12px;border:1px solid #e2e8f0}
-.party{padding:10px;border-bottom:1px solid #eee;cursor:pointer}
-.active{border-left:5px solid #22c55e}
-.block{border-left:5px solid #ef4444;background:#fff1f2}
-.btn{padding:6px 12px;border-radius:8px;color:#fff;text-decoration:none;margin:5px 5px 0 0;display:inline-block}
+
+body{
+font-family:Arial;
+margin:0;
+background:#f1f5f9;
+height:100vh;
+display:flex;
+flex-direction:column;
+}
+
+.header{
+background:#fff;
+padding:10px;
+border-bottom:1px solid #ddd;
+text-align:center;
+}
+
+.main{
+flex:1;
+display:flex;
+overflow:hidden;
+}
+
+.left{
+width:45%;
+background:#fff;
+overflow-y:auto;
+border-right:1px solid #ddd;
+}
+
+.right{
+width:55%;
+padding:10px;
+overflow-y:auto;
+}
+
+.party{
+padding:12px;
+border-bottom:1px solid #eee;
+cursor:pointer;
+}
+
+.party.activeSel{
+background:#ecfdf5;
+}
+
+.block{border-left:5px solid #ef4444;}
+.active{border-left:5px solid #22c55e;}
+
+.card{
+background:#fff;
+padding:12px;
+border-radius:12px;
+border:1px solid #e2e8f0;
+margin-bottom:10px;
+}
+
+.btn{
+padding:8px 14px;
+border-radius:8px;
+color:#fff;
+text-decoration:none;
+margin:5px 5px 0 0;
+display:inline-block;
+font-size:14px;
+}
+
 .call{background:#16a34a}
 .wa{background:#25D366}
 .nav{background:#2563eb}
 .start{background:#0f766e}
+
+.small{font-size:12px;color:#555}
+
+@media(max-width:768px){
+.main{flex-direction:column;}
+.left,.right{width:100%;}
+}
+
 </style>
 </head>
 
@@ -26,27 +95,23 @@ body{font-family:Arial;margin:0;background:#f1f5f9}
 
 <select id="daySelect"></select>
 <div id="dayArea"></div>
-<div id="kpi"></div>
 
 <button class="btn start" onclick="startJourney()">Start Journey</button>
 
 </div>
 
-<div class="card" id="journeyBox" style="display:none"></div>
-<div class="card" id="mission"></div>
-<div class="card" id="routeSummary"></div>
-<div class="card" id="quickStats"></div>
+<div class="main">
 
-<div class="card">
-<b>Party List</b>
+<div class="left">
+<div class="card" id="summary"></div>
 <div id="partyList"></div>
 </div>
 
-<div class="card" id="partyCard" style="display:none"></div>
+<div class="right">
+<div id="journeyBox"></div>
+<div id="partyCard">Select a party to view details</div>
+</div>
 
-<div class="card">
-<b>🏆 Credit Cycle > 45</b>
-<div id="creditList"></div>
 </div>
 
 <script>
@@ -62,26 +127,40 @@ Friday:["PADAMPUR"],
 Saturday:["PAIKMAL","MANDOSIL"]
 };
 
-let sheetData=[],todayData=[],routeData=[];
+let sheetData=[],todayData=[],routeData=[],selectedRow;
 let startLat,startLng;
 
 function num(v){return Number(String(v||0).replace(/[^0-9.-]/g,""))||0;}
 
 function distance(lat1,lon1,lat2,lon2){
+
 lat1=Number(lat1); lon1=Number(lon1);
 lat2=Number(lat2); lon2=Number(lon2);
+
+if(!lat2 || !lon2) return 9999;
+
 let R=6371;
+
 let dLat=(lat2-lat1)*Math.PI/180;
 let dLon=(lon2-lon1)*Math.PI/180;
-let a=Math.sin(dLat/2)**2+
+
+let a=
+Math.sin(dLat/2)*Math.sin(dLat/2)+
 Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*
-Math.sin(dLon/2)**2;
+Math.sin(dLon/2)*Math.sin(dLon/2);
+
 return R*(2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a)));
 }
 
 function loadData(){
-Papa.parse(url,{download:true,header:true,skipEmptyLines:true,
-complete:function(res){sheetData=res.data;render();}
+Papa.parse(url,{
+download:true,
+header:true,
+skipEmptyLines:true,
+complete:function(res){
+sheetData=res.data;
+render();
+}
 });
 }
 
@@ -95,44 +174,70 @@ document.getElementById("dayArea").innerHTML="<b>"+day+" → "+areas.join(", ")+
 todayData=sheetData.filter(r=>areas.includes((r["AREA"]||"").toUpperCase()));
 routeData=[...todayData];
 
-renderPartyList(routeData);
-renderCreditList(todayData);
-renderSummary(todayData);
-
+renderSummary();
+renderPartyList();
 }
 
-function renderSummary(data){
+function renderSummary(){
 
-let blocked=0,unlock=0,collection=0,balance=0;
+let blocked=0,unlock=0;
 
-data.forEach(r=>{
-collection+=num(r["Collections Current Month"]);
-balance+=num(r["BALANCE"]);
+todayData.forEach(r=>{
 if((r["ACCOUNT STATUS"]||"").toUpperCase()=="BLOCK"){
-blocked++; unlock+=num(r["BALANCE"]);
+blocked++;
+unlock+=num(r["BALANCE"]);
 }
 });
 
-document.getElementById("mission").innerHTML="🎯 "+Math.round(balance*0.3).toLocaleString()+" | 💰 "+collection.toLocaleString();
-document.getElementById("routeSummary").innerHTML="🔴 "+blocked+" | 🔓 "+unlock.toLocaleString();
-document.getElementById("quickStats").innerHTML="👥 "+data.length+" Parties";
-
+document.getElementById("summary").innerHTML=
+"👥 "+todayData.length+
+" | 🔴 "+blocked+
+" | 🔓 ₹"+unlock.toLocaleString();
 }
 
-function renderPartyList(data){
+function renderPartyList(){
+
 document.getElementById("partyList").innerHTML=
-data.map(p=>`
+routeData.map(p=>`
+
 <div class="party ${(p["ACCOUNT STATUS"]||"").toUpperCase()=="BLOCK"?"block":"active"}"
-onclick="showParty('${p["PARTY"]}')">
-${p["PARTY"]} – ₹${num(p["BALANCE"]).toLocaleString()}
-</div>`).join("");
+onclick="showParty('${p["PARTY"]}',this)">
+
+<b>${p["PARTY"]}</b><br>
+₹${num(p["BALANCE"]).toLocaleString()}
+
+</div>
+
+`).join("");
+
 }
 
-function renderCreditList(data){
-let list=data.filter(r=>num(r["AVG CREDIT CYCLE"])>45)
-.sort((a,b)=>num(b["AVG CREDIT CYCLE"])-num(a["AVG CREDIT CYCLE"]));
-document.getElementById("creditList").innerHTML=
-list.map(p=>`${p["PARTY"]} – ${p["AVG CREDIT CYCLE"]} days`).join("<br>");
+function showParty(name,el){
+
+if(selectedRow) selectedRow.classList.remove("activeSel");
+if(el){el.classList.add("activeSel"); selectedRow=el;}
+
+let p=sheetData.find(x=>x["PARTY"]===name);
+
+let map=`https://www.google.com/maps?q=${p["LAT"]},${p["LNG"]}`;
+
+document.getElementById("partyCard").innerHTML=`
+
+<div class="card">
+
+<b>${p["PARTY"]}</b><br>
+${p["AREA"]}<br><br>
+
+Balance ₹${num(p["BALANCE"]).toLocaleString()}<br>
+Credit ${p["AVG CREDIT CYCLE"]} days<br><br>
+
+<a class="btn call" href="tel:${p["PHONE"]}">Call</a>
+<a class="btn wa" href="https://wa.me/91${p["PHONE"]}">WhatsApp</a>
+<a class="btn nav" href="${map}" target="_blank">Navigate</a>
+
+</div>
+`;
+
 }
 
 function startJourney(){
@@ -145,6 +250,7 @@ startLng=pos.coords.longitude;
 generateRoute();
 
 });
+
 }
 
 function generateRoute(){
@@ -159,50 +265,36 @@ let currentLng=startLng;
 while(remaining.length){
 
 let nearest=remaining.reduce((prev,curr)=>{
+
 return distance(currentLat,currentLng,curr["LAT"],curr["LNG"]) <
 distance(currentLat,currentLng,prev["LAT"],prev["LNG"]) ? curr : prev;
+
 });
 
 let d=distance(currentLat,currentLng,nearest["LAT"],nearest["LNG"]);
 totalDistance+=d;
 
-currentLat=Number(nearest["LAT"]);
-currentLng=Number(nearest["LNG"]);
+currentLat=nearest["LAT"];
+currentLng=nearest["LNG"];
 
 ordered.push(nearest);
 remaining=remaining.filter(x=>x!==nearest);
+
 }
 
 routeData=ordered;
 
 let time=(totalDistance/25)*60;
 
-document.getElementById("journeyBox").style.display="block";
-document.getElementById("journeyBox").innerHTML=
-"🛣 "+totalDistance.toFixed(1)+" km | ⏱ "+time.toFixed(0)+" mins | 📍 "+ordered.length+" stops";
+document.getElementById("journeyBox").innerHTML=`
+<div class="card">
+🛣 ${totalDistance.toFixed(1)} km
+| ⏱ ${time.toFixed(0)} mins
+| 📍 ${ordered.length} stops
+</div>`;
 
-renderPartyList(routeData);
+renderPartyList();
 
-}
-
-function showParty(name){
-
-let p=sheetData.find(x=>x["PARTY"]===name);
-let map=`https://www.google.com/maps?q=${p["LAT"]},${p["LNG"]}`;
-
-document.getElementById("partyCard").style.display="block";
-document.getElementById("partyCard").innerHTML=`
-
-<b>${p["PARTY"]}</b><br>
-${p["AREA"]}<br><br>
-
-Balance ₹${num(p["BALANCE"]).toLocaleString()}<br>
-
-<a class="btn call" href="tel:${p["PHONE"]}">Call</a>
-<a class="btn wa" href="https://wa.me/91${p["PHONE"]}">WhatsApp</a>
-<a class="btn nav" href="${map}" target="_blank">Navigate</a>
-
-`;
 }
 
 Object.keys(tourPlan).forEach(d=>daySelect.innerHTML+=`<option>${d}</option>`);
