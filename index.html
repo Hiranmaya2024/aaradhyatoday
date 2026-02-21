@@ -25,7 +25,6 @@ body{font-family:Arial;margin:0;background:#f1f5f9}
 <div class="header">
 <select id="daySelect"></select>
 <div id="dayArea"></div>
-<button class="btn start" onclick="startJourney()">Start Journey</button>
 </div>
 
 <div class="main">
@@ -52,6 +51,8 @@ body{font-family:Arial;margin:0;background:#f1f5f9}
 
 <script>
 
+const url="https://docs.google.com/spreadsheets/d/e/2PACX-1vQ3bMMFf71-vdGNiWFnf7pD9XuAAUSA7J-g08ocyC2LNiVOTUHi56lB-7bKTKj0KK9nJGs9vU0THQ0E/pub?gid=1044390124&single=true&output=csv";
+
 const tourPlan={
 Monday:["JURIA"],
 Tuesday:["GHESS"],
@@ -61,21 +62,49 @@ Friday:["PADAMPUR"],
 Saturday:["PAIKMAL","MANDOSIL"]
 };
 
-const url="https://docs.google.com/spreadsheets/d/e/2PACX-1vQ3bMMFf71-vdGNiWFnf7pD9XuAAUSA7J-g08ocyC2LNiVOTUHi56lB-7bKTKj0KK9nJGs9vU0THQ0E/pub?gid=1044390124&single=true&output=csv";
-
-let sheetData=[],todayData=[];
+let rawData=[],todayData=[];
 
 function num(v){return Number(String(v||0).replace(/[^0-9.-]/g,""))||0;}
 
-function getTodayDay(){
-let d=new Date().toLocaleDateString("en-US",{weekday:"long"});
-return tourPlan[d]?d:"Monday";
+function normalizeRow(r){
+
+return{
+party:r["PARTY"],
+area:(r["AREA"]||"").toUpperCase(),
+status:(r["ACCOUNT STATUS"]||"").toUpperCase(),
+balance:num(r["BALANCE"]),
+creditDays:num(r["AVG CREDIT CYCLE"] || r["AVG CREDIT CYCLE "] || r["Avg Credit Cycle"]),
+phone:r["PHONE"],
+lat:r["LAT"],
+lng:r["LNG"],
+reactivate:num(r["Payment needed to Reactivate"])
+};
+
 }
 
 function loadData(){
-Papa.parse(url,{download:true,header:true,skipEmptyLines:true,
-complete:function(res){sheetData=res.data;init();}
+
+Papa.parse(url,{
+download:true,
+header:true,
+skipEmptyLines:true,
+
+complete:function(res){
+
+rawData=res.data.map(normalizeRow);
+
+init();
+
+}
+
 });
+}
+
+function getTodayDay(){
+
+let d=new Date().toLocaleDateString("en-US",{weekday:"long"});
+return tourPlan[d]?d:"Monday";
+
 }
 
 function init(){
@@ -86,6 +115,7 @@ daySelect.value=getTodayDay();
 daySelect.onchange=render;
 
 render();
+
 }
 
 function render(){
@@ -95,72 +125,70 @@ let areas=tourPlan[day];
 
 document.getElementById("dayArea").innerHTML="<b>"+day+" → "+areas.join(", ")+"</b>";
 
-todayData=sheetData.filter(r=>areas.includes((r["AREA"]||"").toUpperCase()));
+todayData=rawData.filter(r=>areas.includes(r.area));
 
 renderSummary();
 renderPartyList();
 renderCreditList();
 renderAI();
+
 }
 
 function renderSummary(){
 
-let recoverable=0;
-
-todayData.forEach(r=>recoverable+=num(r["Payment needed to Reactivate"]));
+let total=0;
+todayData.forEach(r=>total+=r.reactivate);
 
 document.getElementById("summary").innerHTML=
-"📊 Recoverable Today ₹"+recoverable.toLocaleString();
+"📊 Recoverable Today ₹"+total.toLocaleString();
+
 }
 
 function renderPartyList(){
 
 document.getElementById("partyList").innerHTML=
 todayData.map(p=>`
-<div class="party ${(p["ACCOUNT STATUS"]||"").toUpperCase()=="BLOCK"?"block":"active"}"
-onclick="showParty('${p["PARTY"]}')">
-${p["PARTY"]}<br>₹${num(p["BALANCE"]).toLocaleString()}
+<div class="party ${p.status==="BLOCK"?"block":"active"}"
+onclick="showParty('${p.party}')">
+${p.party}<br>₹${p.balance.toLocaleString()}
 </div>`).join("");
+
 }
 
 function renderCreditList(){
 
-let list=[...todayData]
-.sort((a,b)=>num(b["AVG CREDIT CYCLE"])-num(a["AVG CREDIT CYCLE"]));
+let list=[...todayData].sort((a,b)=>b.creditDays-a.creditDays);
 
 document.getElementById("creditList").innerHTML=
-list.map(p=>`${p["PARTY"]} – ${p["AVG CREDIT CYCLE"]} days`).join("<br>");
+list.map(p=>`${p.party} – ${p.creditDays} days`).join("<br>");
+
 }
 
 function renderAI(){
 
 let priority=[...todayData]
-.sort((a,b)=>num(b["AVG CREDIT CYCLE"])+num(b["BALANCE"])-
-(num(a["AVG CREDIT CYCLE"])+num(a["BALANCE"])))[0];
+.sort((a,b)=>(b.creditDays+b.balance)-(a.creditDays+a.balance))[0];
 
-let next=priority;
+document.getElementById("aiBox").innerHTML=
+`🔥 Priority Recovery: <b>${priority?.party||"-"}</b>`;
 
-document.getElementById("aiBox").innerHTML=`
-🔥 Priority Recovery: <b>${priority["PARTY"]}</b><br>
-🟢 Next Visit: <b>${next["PARTY"]}</b>
-`;
 }
 
 function showParty(name){
 
-let p=sheetData.find(x=>x["PARTY"]===name);
+let p=todayData.find(x=>x.party===name);
 
 document.getElementById("partyCard").innerHTML=`
-<b>${p["PARTY"]}</b><br>${p["AREA"]}<br>
-Balance ₹${num(p["BALANCE"]).toLocaleString()}<br><br>
+<b>${p.party}</b><br>${p.area}<br>
+Balance ₹${p.balance.toLocaleString()}<br>
+Credit ${p.creditDays} days<br><br>
 
-<a class="btn call" href="tel:${p["PHONE"]}">Call</a>
-<a class="btn wa" href="https://wa.me/91${p["PHONE"]}">WhatsApp</a>
-<a class="btn nav" href="https://www.google.com/maps?q=${p["LAT"]},${p["LNG"]}" target="_blank">Navigate</a>
+<a class="btn call" href="tel:${p.phone}">Call</a>
+<a class="btn wa" href="https://wa.me/91${p.phone}">WhatsApp</a>
+<a class="btn nav" href="https://www.google.com/maps?q=${p.lat},${p.lng}" target="_blank">Navigate</a>
 `;
-}
 
-function startJourney(){alert("Route logic continues here");}
+}
 
 loadData();
 
