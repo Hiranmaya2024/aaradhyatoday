@@ -38,9 +38,12 @@ AARADHYA TODAY
 
 const sheetURL="https://docs.google.com/spreadsheets/d/e/2PACX-1vQ3bMMFf71-vdGNiWFnf7pD9XuAAUSA7J-g08ocyC2LNiVOTUHi56lB-7bKTKj0KK9nJGs9vU0THQ0E/pub?gid=1044390124&single=true&output=csv";
 
-let data=[],visited=new Set();
-let routeTarget=0,routeRecovered=0;
-let firstVisit=null,lastVisit=null;
+let data=[];
+let visited=new Set();
+let routeRecovered=0;
+let routeTarget=0;
+let firstVisit=null;
+let lastVisit=null;
 
 const deadlineHour=18;
 const deadlineMinute=30;
@@ -97,17 +100,17 @@ return b.balance-a.balance;
 document.getElementById("count").innerText=list.length+" Parties";
 
 document.getElementById("list").innerHTML=
-list.map(p=>`
-<div id="row_${p.name}"
+list.map((p,i)=>`
+<div id="row_${i}"
 class="partyItem ${p.status==="BLOCK"?"block":"active"}"
-onclick="visit('${p.name}',${p.collection})">
+onclick="visit('${p.name}',${p.collection},${i})">
 ${p.name}
 <span>₹${p.balance.toLocaleString()}</span>
 </div>
 `).join("");
 }
 
-function visit(name,collection){
+function visit(name,collection,index){
 
 if(!firstVisit)firstVisit=new Date();
 lastVisit=new Date();
@@ -115,10 +118,26 @@ lastVisit=new Date();
 visited.add(name);
 routeRecovered+=collection;
 
-document.getElementById("row_"+name)?.classList.add("visited");
+let row=document.getElementById("row_"+index);
+row.classList.add("visited");
 
 showDetails(name);
+
+autoFocusNext(index);
+
 updateMission(data.length);
+}
+
+function autoFocusNext(index){
+
+let next=document.getElementById("row_"+(index+1));
+
+if(next){
+next.scrollIntoView({behavior:"smooth",block:"center"});
+next.style.background="#fef9c3";
+
+setTimeout(()=>next.style.background="",1000);
+}
 }
 
 function showDetails(name){
