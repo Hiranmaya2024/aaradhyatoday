@@ -25,6 +25,7 @@ body{font-family:Arial;margin:0;background:#f1f5f9}
 <div class="header">
 <select id="daySelect"></select>
 <div id="dayArea"></div>
+<button class="btn start" onclick="getLocation()">Refresh AI</button>
 </div>
 
 <div class="main">
@@ -36,7 +37,7 @@ body{font-family:Arial;margin:0;background:#f1f5f9}
 
 <div class="right">
 
-<div class="card" id="aiBox"></div>
+<div class="card" id="aiBox">AI loading…</div>
 
 <div class="card" id="partyCard">Select a party</div>
 
@@ -62,60 +63,60 @@ Friday:["PADAMPUR"],
 Saturday:["PAIKMAL","MANDOSIL"]
 };
 
-let rawData=[],todayData=[];
+let rawData=[],todayData=[],userLat,userLng;
 
 function num(v){return Number(String(v||0).replace(/[^0-9.-]/g,""))||0;}
 
-function normalizeRow(r){
+function distance(lat1,lon1,lat2,lon2){
 
+if(!lat2 || !lon2) return 999;
+
+let R=6371;
+let dLat=(lat2-lat1)*Math.PI/180;
+let dLon=(lon2-lon1)*Math.PI/180;
+
+let a=Math.sin(dLat/2)**2+
+Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*
+Math.sin(dLon/2)**2;
+
+return R*(2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a)));
+}
+
+function normalizeRow(r){
 return{
 party:r["PARTY"],
 area:(r["AREA"]||"").toUpperCase(),
 status:(r["ACCOUNT STATUS"]||"").toUpperCase(),
 balance:num(r["BALANCE"]),
-creditDays:num(r["AVG CREDIT CYCLE"] || r["AVG CREDIT CYCLE "] || r["Avg Credit Cycle"]),
+creditDays:num(r["AVG CREDIT CYCLE"]),
 phone:r["PHONE"],
-lat:r["LAT"],
-lng:r["LNG"],
+lat:Number(r["LAT"]),
+lng:Number(r["LNG"]),
 reactivate:num(r["Payment needed to Reactivate"])
 };
-
 }
 
 function loadData(){
-
 Papa.parse(url,{
 download:true,
 header:true,
 skipEmptyLines:true,
-
 complete:function(res){
-
 rawData=res.data.map(normalizeRow);
-
 init();
-
 }
-
 });
-}
-
-function getTodayDay(){
-
-let d=new Date().toLocaleDateString("en-US",{weekday:"long"});
-return tourPlan[d]?d:"Monday";
-
 }
 
 function init(){
 
 Object.keys(tourPlan).forEach(d=>daySelect.innerHTML+=`<option>${d}</option>`);
 
-daySelect.value=getTodayDay();
+daySelect.value="Monday";
 daySelect.onchange=render;
 
 render();
-
+getLocation();
 }
 
 function render(){
@@ -127,10 +128,10 @@ document.getElementById("dayArea").innerHTML="<b>"+day+" → "+areas.join(", ")+
 
 todayData=rawData.filter(r=>areas.includes(r.area));
 
-renderSummary();
 renderPartyList();
 renderCreditList();
-renderAI();
+renderSummary();
+runAI();
 
 }
 
@@ -139,9 +140,7 @@ function renderSummary(){
 let total=0;
 todayData.forEach(r=>total+=r.reactivate);
 
-document.getElementById("summary").innerHTML=
-"📊 Recoverable Today ₹"+total.toLocaleString();
-
+document.getElementById("summary").innerHTML="Recoverable ₹"+total.toLocaleString();
 }
 
 function renderPartyList(){
@@ -152,7 +151,6 @@ todayData.map(p=>`
 onclick="showParty('${p.party}')">
 ${p.party}<br>₹${p.balance.toLocaleString()}
 </div>`).join("");
-
 }
 
 function renderCreditList(){
@@ -161,17 +159,37 @@ let list=[...todayData].sort((a,b)=>b.creditDays-a.creditDays);
 
 document.getElementById("creditList").innerHTML=
 list.map(p=>`${p.party} – ${p.creditDays} days`).join("<br>");
+}
+
+function runAI(){
+
+if(!userLat){document.getElementById("aiBox").innerHTML="Fetching GPS…";return;}
+
+let scored=todayData.map(p=>{
+
+let dist=distance(userLat,userLng,p.lat,p.lng);
+
+let score=
+(p.reactivate*0.6)+
+(p.creditDays*0.25)-
+(dist*0.15);
+
+return {...p,dist,score};
+
+}).sort((a,b)=>b.score-a.score)[0];
+
+document.getElementById("aiBox").innerHTML=
+`🟢 Next Visit:<br><b>${scored.party}</b><br>
+₹${scored.reactivate.toLocaleString()} • ${scored.creditDays} days • ${scored.dist.toFixed(1)} km`;
 
 }
 
-function renderAI(){
-
-let priority=[...todayData]
-.sort((a,b)=>(b.creditDays+b.balance)-(a.creditDays+a.balance))[0];
-
-document.getElementById("aiBox").innerHTML=
-`🔥 Priority Recovery: <b>${priority?.party||"-"}</b>`;
-
+function getLocation(){
+navigator.geolocation.getCurrentPosition(pos=>{
+userLat=pos.coords.latitude;
+userLng=pos.coords.longitude;
+runAI();
+});
 }
 
 function showParty(name){
