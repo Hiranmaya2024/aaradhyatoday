@@ -3,7 +3,6 @@
 <head>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>AARADHYA TODAY</title>
-
 <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
 
 <style>
@@ -16,7 +15,7 @@ body{font-family:Arial;margin:0;background:#f1f5f9}
 .party{padding:10px;border-bottom:1px solid #eee;cursor:pointer}
 .block{border-left:4px solid red}
 .active{border-left:4px solid green}
-.btn{padding:6px 10px;border-radius:8px;color:#fff;text-decoration:none;margin:5px 5px 0 0;display:inline-block}
+.btn{padding:6px 10px;border-radius:8px;color:#fff;border:none;margin:5px 5px 0 0}
 .call{background:#16a34a}.wa{background:#25D366}.nav{background:#2563eb}.start{background:#0f766e}
 iframe{width:100%;height:240px;border:0;border-radius:10px}
 @media(max-width:768px){.main{flex-direction:column;height:auto}.left,.right{width:100%}}
@@ -29,7 +28,6 @@ iframe{width:100%;height:240px;border:0;border-radius:10px}
 <select id="daySelect"></select>
 <div id="dayArea"></div>
 <button class="btn start" onclick="startJourney()">Start Journey</button>
-<button class="btn start" onclick="getLocation()">Refresh AI</button>
 </div>
 
 <div class="main">
@@ -40,7 +38,7 @@ iframe{width:100%;height:240px;border:0;border-radius:10px}
 </div>
 
 <div class="right">
-<div class="card" id="aiBox">📍 Allow location for AI</div>
+<div class="card" id="aiBox">Start journey for AI</div>
 <div class="card" id="partyCard">Select a party</div>
 <div id="mapBox"></div>
 </div>
@@ -60,8 +58,10 @@ Friday:["PADAMPUR"],
 Saturday:["PAIKMAL","MANDOSIL"]
 };
 
-let data=[],today=[],route=[];
+let data=[],today=[],route=[],visits=[];
 let userLat,userLng;
+
+let visitState={current:null,startTime:null,amount:0};
 
 const num=v=>Number(String(v||0).replace(/[^0-9.-]/g,""))||0;
 
@@ -71,13 +71,11 @@ return tourPlan[d]?d:"Monday";
 }
 
 function load(){
-
 Papa.parse(CSV,{
 download:true,
 header:true,
 skipEmptyLines:true,
 complete:res=>{
-
 data=res.data.map(r=>({
 party:r["PARTY"],
 area:(r["AREA"]||"").toUpperCase(),
@@ -91,63 +89,41 @@ reactivate:num(r["Payment needed to Reactivate"]),
 mtdB:num(r["BUSINESS CURRENT MONTH"]),
 mtdC:num(r["Collections Current Month"])
 })).filter(x=>x.party && x.area);
-
 init();
-
-}
-});
-
+}});
 }
 
 function init(){
-
 Object.keys(tourPlan).forEach(d=>daySelect.innerHTML+=`<option>${d}</option>`);
 daySelect.value=todayName();
 daySelect.onchange=render;
-
 render();
-
 }
 
 function render(){
 
 let areas=tourPlan[daySelect.value];
-
 today=data.filter(x=>areas.includes(x.area));
 
 let b=0,c=0,r=0;
 today.forEach(x=>{b+=x.mtdB;c+=x.mtdC;r+=x.reactivate});
 
-summary.innerHTML=`
-📦 MTD Business ₹${b.toLocaleString()}<br>
-💰 MTD Collection ₹${c.toLocaleString()}<br>
-🎯 Recoverable ₹${r.toLocaleString()}
-`;
+summary.innerHTML=`📦 MTD Business ₹${b}<br>💰 MTD Collection ₹${c}<br>🎯 Recoverable ₹${r}`;
 
 partyList.innerHTML=today.map(p=>`
-<div class="party ${p.status==="BLOCK"?"block":"active"}"
-onclick="showParty('${p.party}')">
-${p.party}<br>₹${p.balance.toLocaleString()}
+<div class="party ${p.status==="BLOCK"?"block":"active"}" onclick="showParty('${p.party}')">
+${p.party}<br>₹${p.balance}
 </div>`).join("");
-
-runAI();
 
 }
 
 function showParty(name){
-
 let p=today.find(x=>x.party===name);
-
 partyCard.innerHTML=`
-<b>${p.party}</b><br>${p.area}<br>
-Balance ₹${p.balance.toLocaleString()}<br>
-Credit ${p.credit} days<br><br>
-
+<b>${p.party}</b><br>
 <a class="btn call" href="tel:${p.phone}">Call</a>
 <a class="btn wa" href="https://wa.me/91${p.phone}">WhatsApp</a>
-<a class="btn nav" href="https://www.google.com/maps?q=${p.lat},${p.lng}" target="_blank">Navigate</a>
-`;
-
+<a class="btn nav" href="https://www.google.com/maps?q=${p.lat},${p.lng}" target="_blank">Navigate</a>`;
 }
 
 function distance(a,b,c,d){
@@ -160,37 +136,8 @@ Math.sin(dLon/2)**2;
 return R*(2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x)));
 }
 
-function getLocation(){
-
-navigator.geolocation.getCurrentPosition(pos=>{
-userLat=pos.coords.latitude;
-userLng=pos.coords.longitude;
-runAI();
-});
-
-}
-
-function runAI(){
-
-if(!userLat)return;
-
-let best=[...today].map(p=>{
-let dist=distance(userLat,userLng,p.lat,p.lng);
-let score=(p.reactivate*0.6)+(p.credit*0.25)-(dist*0.15);
-return {...p,dist,score};
-}).sort((a,b)=>b.score-a.score)[0];
-
-aiBox.innerHTML=`
-🟢 Next Visit<br><b>${best.party}</b><br>
-₹${best.reactivate.toLocaleString()} • ${best.credit} days • ${best.dist.toFixed(1)} km
-`;
-
-}
-
 function startJourney(){
-
 navigator.geolocation.getCurrentPosition(pos=>{
-
 userLat=pos.coords.latitude;
 userLng=pos.coords.longitude;
 
@@ -202,38 +149,73 @@ route=[];
 let clat=userLat,clng=userLng;
 
 while(remaining.length){
-
-let nearest=remaining.reduce((a,b)=>
-distance(clat,clng,a.lat,a.lng)<
-distance(clat,clng,b.lat,b.lng)?a:b);
-
+let nearest=remaining.reduce((a,b)=>distance(clat,clng,a.lat,a.lng)<distance(clat,clng,b.lat,b.lng)?a:b);
 route.push(nearest);
 clat=nearest.lat;
 clng=nearest.lng;
 remaining=remaining.filter(x=>x!==nearest);
-
 }
 
 drawMap();
-runAI();
+nextVisit();
 
 });
-
 }
 
 function drawMap(){
 
-let navURL="https://www.google.com/maps/dir/?api=1&origin="+
-userLat+","+userLng+
+let navURL="https://www.google.com/maps/dir/?api=1&origin="+userLat+","+userLng+
 "&destination="+route.at(-1).lat+","+route.at(-1).lng+
 "&waypoints="+route.map(p=>p.lat+","+p.lng).join("|");
 
-let previewURL=`https://www.google.com/maps?q=${route[0].lat},${route[0].lng}&z=13&output=embed`;
+let preview=`https://www.google.com/maps?q=${route[0].lat},${route[0].lng}&output=embed`;
 
-mapBox.innerHTML=`
-<iframe src="${previewURL}"></iframe>
-<a class="btn nav" href="${navURL}" target="_blank">🧭 Open Full Route in Google Maps</a>
+mapBox.innerHTML=`<iframe src="${preview}"></iframe>
+<a class="btn nav" href="${navURL}" target="_blank">Open Full Route</a>`;
+}
+
+function nextVisit(){
+
+let p=route[0];
+
+aiBox.innerHTML=`
+<b>${p.party}</b><br>
+₹${p.balance} || ${p.credit} days || ${distance(userLat,userLng,p.lat,p.lng).toFixed(1)} km<br><br>
+
+<button class="btn start" onclick="startVisit()">STOP</button>
+<button class="btn" id="collectBtn" disabled onclick="collect()">COLLECT</button>
+<button class="btn nav" id="goBtn" disabled onclick="endVisit()">GO</button>
 `;
+
+visitState.current=p;
+
+}
+
+function startVisit(){
+visitState.startTime=new Date();
+collectBtn.disabled=false;
+}
+
+function collect(){
+let amt=prompt("Enter amount");
+visitState.amount=Number(amt||0);
+goBtn.disabled=false;
+}
+
+function endVisit(){
+
+let end=new Date();
+
+visits.push({
+party:visitState.current.party,
+amount:visitState.amount,
+duration:Math.round((end-visitState.startTime)/1000)
+});
+
+route.shift();
+
+if(route.length) nextVisit();
+else aiBox.innerHTML="Route completed ✅";
 
 }
 
