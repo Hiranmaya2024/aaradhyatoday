@@ -67,19 +67,9 @@ let rawData=[],todayData=[],userLat,userLng;
 
 function num(v){return Number(String(v||0).replace(/[^0-9.-]/g,""))||0;}
 
-function distance(lat1,lon1,lat2,lon2){
-
-if(!lat2 || !lon2) return 999;
-
-let R=6371;
-let dLat=(lat2-lat1)*Math.PI/180;
-let dLon=(lon2-lon1)*Math.PI/180;
-
-let a=Math.sin(dLat/2)**2+
-Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*
-Math.sin(dLon/2)**2;
-
-return R*(2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a)));
+function getTodayDay(){
+let d=new Date().toLocaleDateString("en-US",{weekday:"long"});
+return tourPlan[d]?d:"Monday";
 }
 
 function normalizeRow(r){
@@ -92,7 +82,9 @@ creditDays:num(r["AVG CREDIT CYCLE"]),
 phone:r["PHONE"],
 lat:Number(r["LAT"]),
 lng:Number(r["LNG"]),
-reactivate:num(r["Payment needed to Reactivate"])
+reactivate:num(r["Payment needed to Reactivate"]),
+mtdBusiness:num(r["BUSINESS CURRENT MONTH"]),
+mtdCollection:num(r["Collections Current Month"])
 };
 }
 
@@ -112,7 +104,7 @@ function init(){
 
 Object.keys(tourPlan).forEach(d=>daySelect.innerHTML+=`<option>${d}</option>`);
 
-daySelect.value="Monday";
+daySelect.value=getTodayDay();
 daySelect.onchange=render;
 
 render();
@@ -128,19 +120,27 @@ document.getElementById("dayArea").innerHTML="<b>"+day+" → "+areas.join(", ")+
 
 todayData=rawData.filter(r=>areas.includes(r.area));
 
+renderSummary();
 renderPartyList();
 renderCreditList();
-renderSummary();
 runAI();
 
 }
 
 function renderSummary(){
 
-let total=0;
-todayData.forEach(r=>total+=r.reactivate);
+let recoverable=0,mtdBusiness=0,mtdCollection=0;
 
-document.getElementById("summary").innerHTML="Recoverable ₹"+total.toLocaleString();
+todayData.forEach(r=>{
+recoverable+=r.reactivate;
+mtdBusiness+=r.mtdBusiness;
+mtdCollection+=r.mtdCollection;
+});
+
+document.getElementById("summary").innerHTML=
+`📦 MTD Business ₹${mtdBusiness.toLocaleString()}<br>
+💰 MTD Collection ₹${mtdCollection.toLocaleString()}<br>
+🎯 Recoverable ₹${recoverable.toLocaleString()}`;
 }
 
 function renderPartyList(){
@@ -161,6 +161,21 @@ document.getElementById("creditList").innerHTML=
 list.map(p=>`${p.party} – ${p.creditDays} days`).join("<br>");
 }
 
+function distance(lat1,lon1,lat2,lon2){
+
+if(!lat2 || !lon2) return 999;
+
+let R=6371;
+let dLat=(lat2-lat1)*Math.PI/180;
+let dLon=(lon2-lon1)*Math.PI/180;
+
+let a=Math.sin(dLat/2)**2+
+Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*
+Math.sin(dLon/2)**2;
+
+return R*(2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a)));
+}
+
 function runAI(){
 
 if(!userLat){document.getElementById("aiBox").innerHTML="Fetching GPS…";return;}
@@ -169,10 +184,7 @@ let scored=todayData.map(p=>{
 
 let dist=distance(userLat,userLng,p.lat,p.lng);
 
-let score=
-(p.reactivate*0.6)+
-(p.creditDays*0.25)-
-(dist*0.15);
+let score=(p.reactivate*0.6)+(p.creditDays*0.25)-(dist*0.15);
 
 return {...p,dist,score};
 
