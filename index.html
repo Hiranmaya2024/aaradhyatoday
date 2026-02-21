@@ -3,6 +3,7 @@
 <head>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>AARADHYA TODAY</title>
+
 <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
 
 <style>
@@ -17,7 +18,8 @@ body{font-family:Arial;margin:0;background:#f1f5f9}
 .active{border-left:4px solid green}
 .btn{padding:6px 10px;border-radius:8px;color:#fff;text-decoration:none;margin:5px 5px 0 0;display:inline-block}
 .call{background:#16a34a}.wa{background:#25D366}.nav{background:#2563eb}.start{background:#0f766e}
-iframe{width:100%;height:250px;border:0;border-radius:10px}
+iframe{width:100%;height:240px;border:0;border-radius:10px}
+@media(max-width:768px){.main{flex-direction:column;height:auto}.left,.right{width:100%}}
 </style>
 </head>
 
@@ -27,6 +29,7 @@ iframe{width:100%;height:250px;border:0;border-radius:10px}
 <select id="daySelect"></select>
 <div id="dayArea"></div>
 <button class="btn start" onclick="startJourney()">Start Journey</button>
+<button class="btn start" onclick="getLocation()">Refresh AI</button>
 </div>
 
 <div class="main">
@@ -37,7 +40,7 @@ iframe{width:100%;height:250px;border:0;border-radius:10px}
 </div>
 
 <div class="right">
-<div class="card" id="aiBox">Allow location for AI</div>
+<div class="card" id="aiBox">📍 Allow location for AI</div>
 <div class="card" id="partyCard">Select a party</div>
 <div id="mapBox"></div>
 </div>
@@ -103,6 +106,7 @@ daySelect.value=todayName();
 daySelect.onchange=render;
 
 render();
+
 }
 
 function render(){
@@ -156,53 +160,13 @@ Math.sin(dLon/2)**2;
 return R*(2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x)));
 }
 
-function startJourney(){
+function getLocation(){
 
 navigator.geolocation.getCurrentPosition(pos=>{
-
 userLat=pos.coords.latitude;
 userLng=pos.coords.longitude;
-
-let stops=today.filter(p=>p.lat && p.lng);
-
-let remaining=[...stops];
-let ordered=[];
-
-let currentLat=userLat,currentLng=userLng;
-
-while(remaining.length){
-
-let nearest=remaining.reduce((a,b)=>
-distance(currentLat,currentLng,a.lat,a.lng)<
-distance(currentLat,currentLng,b.lat,b.lng)?a:b);
-
-ordered.push(nearest);
-
-currentLat=nearest.lat;
-currentLng=nearest.lng;
-
-remaining=remaining.filter(x=>x!==nearest);
-}
-
-route=ordered;
-
-drawMap();
 runAI();
-
 });
-}
-
-function drawMap(){
-
-let url="https://www.google.com/maps/dir/?api=1&origin="+
-userLat+","+userLng+
-"&destination="+route.at(-1).lat+","+route.at(-1).lng+
-"&waypoints="+route.map(p=>p.lat+","+p.lng).join("|");
-
-mapBox.innerHTML=`
-<iframe src="${url}&output=embed"></iframe>
-<a class="btn nav" href="${url}" target="_blank">Open in Google Maps</a>
-`;
 
 }
 
@@ -219,6 +183,56 @@ return {...p,dist,score};
 aiBox.innerHTML=`
 🟢 Next Visit<br><b>${best.party}</b><br>
 ₹${best.reactivate.toLocaleString()} • ${best.credit} days • ${best.dist.toFixed(1)} km
+`;
+
+}
+
+function startJourney(){
+
+navigator.geolocation.getCurrentPosition(pos=>{
+
+userLat=pos.coords.latitude;
+userLng=pos.coords.longitude;
+
+let stops=today.filter(p=>p.lat && p.lng);
+
+let remaining=[...stops];
+route=[];
+
+let clat=userLat,clng=userLng;
+
+while(remaining.length){
+
+let nearest=remaining.reduce((a,b)=>
+distance(clat,clng,a.lat,a.lng)<
+distance(clat,clng,b.lat,b.lng)?a:b);
+
+route.push(nearest);
+clat=nearest.lat;
+clng=nearest.lng;
+remaining=remaining.filter(x=>x!==nearest);
+
+}
+
+drawMap();
+runAI();
+
+});
+
+}
+
+function drawMap(){
+
+let navURL="https://www.google.com/maps/dir/?api=1&origin="+
+userLat+","+userLng+
+"&destination="+route.at(-1).lat+","+route.at(-1).lng+
+"&waypoints="+route.map(p=>p.lat+","+p.lng).join("|");
+
+let previewURL=`https://www.google.com/maps?q=${route[0].lat},${route[0].lng}&z=13&output=embed`;
+
+mapBox.innerHTML=`
+<iframe src="${previewURL}"></iframe>
+<a class="btn nav" href="${navURL}" target="_blank">🧭 Open Full Route in Google Maps</a>
 `;
 
 }
