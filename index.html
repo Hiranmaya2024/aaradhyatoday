@@ -15,9 +15,6 @@ body{font-family:Arial;margin:0;background:#f1f5f9}
 .topCards{display:flex;flex-wrap:wrap;gap:8px;padding:8px}
 .card{background:#fff;padding:10px;border-radius:10px;border:1px solid #e2e8f0;flex:1;min-width:150px}
 
-.progressBox{height:6px;background:#eee;border-radius:10px;margin-top:6px}
-.progressBar{height:6px;border-radius:10px}
-
 .main{display:flex;height:calc(100vh - 220px)}
 .left{width:40%;overflow:auto;background:#fff}
 .right{width:60%;padding:10px;overflow:auto}
@@ -27,18 +24,13 @@ body{font-family:Arial;margin:0;background:#f1f5f9}
 .block{border-left:4px solid red}
 .active{border-left:4px solid green}
 
+iframe{width:100%;height:220px;border:0;border-radius:10px;margin-top:10px}
+
 .btn{padding:8px 12px;border-radius:8px;color:#fff;text-decoration:none;margin:5px 5px 0 0;display:inline-block}
 .call{background:#16a34a}
 .wa{background:#25D366}
 .nav{background:#2563eb}
 .start{background:#0f766e}
-
-iframe{width:100%;height:250px;border:0;border-radius:10px;margin-top:10px}
-
-@media(max-width:768px){
-.main{flex-direction:column;height:auto}
-.left,.right{width:100%}
-}
 
 </style>
 </head>
@@ -52,10 +44,9 @@ iframe{width:100%;height:250px;border:0;border-radius:10px;margin-top:10px}
 </div>
 
 <div class="topCards">
-<div class="card"><div id="fyKPI"></div><div class="progressBox"><div id="progressBar" class="progressBar"></div></div></div>
+<div class="card"><div id="fyKPI"></div></div>
 <div class="card" id="routeSummary"></div>
 <div class="card" id="quickStats"></div>
-<div class="card"><b>Credit >45</b><div id="creditList"></div></div>
 </div>
 
 <div class="main">
@@ -65,8 +56,16 @@ iframe{width:100%;height:250px;border:0;border-radius:10px;margin-top:10px}
 </div>
 
 <div class="right">
-<div id="partyCard">Select a party</div>
+
+<div class="card" id="partyCard">Select a party</div>
+
 <div id="mapBox"></div>
+
+<div class="card">
+<b>Today Credit Risk (Sorted)</b>
+<div id="creditList"></div>
+</div>
+
 </div>
 
 </div>
@@ -84,7 +83,7 @@ Friday:["PADAMPUR"],
 Saturday:["PAIKMAL","MANDOSIL"]
 };
 
-let sheetData=[],todayData=[],routeData=[],startLat,startLng;
+let sheetData=[],todayData=[];
 
 function num(v){return Number(String(v||0).replace(/[^0-9.-]/g,""))||0;}
 
@@ -102,49 +101,48 @@ let areas=tourPlan[day];
 document.getElementById("dayArea").innerHTML="<b>"+day+" → "+areas.join(", ")+"</b>";
 
 todayData=sheetData.filter(r=>areas.includes((r["AREA"]||"").toUpperCase()));
-routeData=[...todayData];
 
-renderCards();
 renderPartyList();
-}
-
-function renderCards(){
-
-let fyBusiness=0,fyBalance=0,blocked=0,unlock=0;
-
-todayData.forEach(r=>{
-fyBusiness+=num(r["BUSINESS"]);
-fyBalance+=num(r["BALANCE"]);
-if((r["ACCOUNT STATUS"]||"").toUpperCase()=="BLOCK"){
-blocked++; unlock+=num(r["BALANCE"]);
-}
-});
-
-let fyCollection=fyBusiness-fyBalance;
-let percent=(fyCollection/fyBusiness)*100;
-
-document.getElementById("fyKPI").innerHTML="₹"+fyCollection.toLocaleString();
-document.getElementById("progressBar").style.width=percent+"%";
-
-document.getElementById("routeSummary").innerHTML="Blocked "+blocked+"<br>Unlock ₹"+unlock.toLocaleString();
-document.getElementById("quickStats").innerHTML="Parties "+todayData.length;
-
-let credit=todayData.filter(r=>num(r["AVG CREDIT CYCLE"])>45)
-.sort((a,b)=>num(b["AVG CREDIT CYCLE"])-num(a["AVG CREDIT CYCLE"]))
-.map(p=>p["PARTY"]).join("<br>");
-
-document.getElementById("creditList").innerHTML=credit;
-
+renderCreditList();
+renderSummary();
 }
 
 function renderPartyList(){
 
 document.getElementById("partyList").innerHTML=
-routeData.map(p=>`
+todayData.map(p=>`
 <div class="party ${(p["ACCOUNT STATUS"]||"").toUpperCase()=="BLOCK"?"block":"active"}"
 onclick="showParty('${p["PARTY"]}',this)">
 ${p["PARTY"]}<br>₹${num(p["BALANCE"]).toLocaleString()}
 </div>`).join("");
+}
+
+function renderCreditList(){
+
+let list=[...todayData]
+.sort((a,b)=>num(b["AVG CREDIT CYCLE"])-num(a["AVG CREDIT CYCLE"]));
+
+document.getElementById("creditList").innerHTML=
+list.map(p=>`
+<div class="party block" onclick="showParty('${p["PARTY"]}')">
+${p["PARTY"]} – ${p["AVG CREDIT CYCLE"]} days
+</div>
+`).join("");
+}
+
+function renderSummary(){
+
+let blocked=0,unlock=0;
+
+todayData.forEach(r=>{
+if((r["ACCOUNT STATUS"]||"").toUpperCase()=="BLOCK"){
+blocked++; unlock+=num(r["BALANCE"]);
+}
+});
+
+document.getElementById("fyKPI").innerHTML="Parties "+todayData.length;
+document.getElementById("routeSummary").innerHTML="Blocked "+blocked;
+document.getElementById("quickStats").innerHTML="Unlock ₹"+unlock.toLocaleString();
 }
 
 function showParty(name,el){
@@ -155,34 +153,21 @@ if(el)el.classList.add("activeSel");
 let p=sheetData.find(x=>x["PARTY"]===name);
 
 document.getElementById("partyCard").innerHTML=`
-<b>${p["PARTY"]}</b><br>${p["AREA"]}<br>
+<b>${p["PARTY"]}</b><br>
+${p["AREA"]}<br>
 Balance ₹${num(p["BALANCE"]).toLocaleString()}<br><br>
+
 <a class="btn call" href="tel:${p["PHONE"]}">Call</a>
 <a class="btn wa" href="https://wa.me/91${p["PHONE"]}">WhatsApp</a>
 <a class="btn nav" href="https://www.google.com/maps?q=${p["LAT"]},${p["LNG"]}" target="_blank">Navigate</a>
 `;
-
 }
 
 function startJourney(){
-
 navigator.geolocation.getCurrentPosition(pos=>{
-
-startLat=pos.coords.latitude;
-startLng=pos.coords.longitude;
-
-generateRoute();
-
-});
-}
-
-function generateRoute(){
-
-let waypoints=routeData.map(p=>p["LAT"]+","+p["LNG"]).join("|");
-
 document.getElementById("mapBox").innerHTML=
-`<iframe src="https://www.google.com/maps?q=${startLat},${startLng}&output=embed"></iframe>`;
-
+`<iframe src="https://www.google.com/maps?q=${pos.coords.latitude},${pos.coords.longitude}&output=embed"></iframe>`;
+});
 }
 
 Object.keys(tourPlan).forEach(d=>daySelect.innerHTML+=`<option>${d}</option>`);
