@@ -17,6 +17,7 @@ body{font-family:Arial;margin:0;background:#f1f5f9}
 .active{border-left:4px solid green}
 .btn{padding:6px 10px;border-radius:8px;color:#fff;text-decoration:none;margin:5px 5px 0 0;display:inline-block}
 .call{background:#16a34a}.wa{background:#25D366}.nav{background:#2563eb}.start{background:#0f766e}
+iframe{width:100%;height:260px;border:0;border-radius:10px;margin-top:10px}
 </style>
 </head>
 
@@ -25,7 +26,7 @@ body{font-family:Arial;margin:0;background:#f1f5f9}
 <div class="header">
 <select id="daySelect"></select>
 <div id="dayArea"></div>
-<button class="btn start" onclick="getLocation()">Refresh AI</button>
+<button class="btn start" onclick="startJourney()">Start Journey</button>
 </div>
 
 <div class="main">
@@ -37,9 +38,10 @@ body{font-family:Arial;margin:0;background:#f1f5f9}
 
 <div class="right">
 
-<div class="card" id="aiBox">AI loading…</div>
-
+<div class="card" id="aiBox"></div>
 <div class="card" id="partyCard">Select a party</div>
+
+<div id="mapBox"></div>
 
 <div class="card">
 <b>Today Credit Risk</b>
@@ -63,41 +65,47 @@ Friday:["PADAMPUR"],
 Saturday:["PAIKMAL","MANDOSIL"]
 };
 
-let rawData=[],todayData=[],userLat,userLng;
+let rawData=[],todayData=[];
+let userLat,userLng;
 
-function num(v){return Number(String(v||0).replace(/[^0-9.-]/g,""))||0;}
+function num(v){return Number(String(v||"0").replace(/[^0-9.-]/g,""))||0;}
 
-function getTodayDay(){
-let d=new Date().toLocaleDateString("en-US",{weekday:"long"});
-return tourPlan[d]?d:"Monday";
-}
+function loadData(){
 
-function normalizeRow(r){
-return{
+Papa.parse(url,{
+download:true,
+header:true,
+skipEmptyLines:true,
+
+complete:function(res){
+
+rawData=res.data.map(r=>({
+
 party:r["PARTY"],
 area:(r["AREA"]||"").toUpperCase(),
 status:(r["ACCOUNT STATUS"]||"").toUpperCase(),
 balance:num(r["BALANCE"]),
-creditDays:num(r["AVG CREDIT CYCLE"]),
+credit:num(r["AVG CREDIT CYCLE"]),
 phone:r["PHONE"],
 lat:Number(r["LAT"]),
 lng:Number(r["LNG"]),
 reactivate:num(r["Payment needed to Reactivate"]),
 mtdBusiness:num(r["BUSINESS CURRENT MONTH"]),
 mtdCollection:num(r["Collections Current Month"])
-};
-}
 
-function loadData(){
-Papa.parse(url,{
-download:true,
-header:true,
-skipEmptyLines:true,
-complete:function(res){
-rawData=res.data.map(normalizeRow);
+}));
+
 init();
+
 }
 });
+}
+
+function getTodayDay(){
+
+let d=new Date().toLocaleDateString("en-US",{weekday:"long"});
+return tourPlan[d]?d:"Monday";
+
 }
 
 function init(){
@@ -108,7 +116,7 @@ daySelect.value=getTodayDay();
 daySelect.onchange=render;
 
 render();
-getLocation();
+
 }
 
 function render(){
@@ -129,18 +137,18 @@ runAI();
 
 function renderSummary(){
 
-let recoverable=0,mtdBusiness=0,mtdCollection=0;
+let b=0,c=0,r=0;
 
-todayData.forEach(r=>{
-recoverable+=r.reactivate;
-mtdBusiness+=r.mtdBusiness;
-mtdCollection+=r.mtdCollection;
+todayData.forEach(x=>{
+b+=x.mtdBusiness;
+c+=x.mtdCollection;
+r+=x.reactivate;
 });
 
 document.getElementById("summary").innerHTML=
-`📦 MTD Business ₹${mtdBusiness.toLocaleString()}<br>
-💰 MTD Collection ₹${mtdCollection.toLocaleString()}<br>
-🎯 Recoverable ₹${recoverable.toLocaleString()}`;
+`📦 MTD Business ₹${b.toLocaleString()}<br>
+💰 MTD Collection ₹${c.toLocaleString()}<br>
+🎯 Recoverable ₹${r.toLocaleString()}`;
 }
 
 function renderPartyList(){
@@ -151,67 +159,89 @@ todayData.map(p=>`
 onclick="showParty('${p.party}')">
 ${p.party}<br>₹${p.balance.toLocaleString()}
 </div>`).join("");
+
 }
 
 function renderCreditList(){
 
-let list=[...todayData].sort((a,b)=>b.creditDays-a.creditDays);
+let list=[...todayData].sort((a,b)=>b.credit-a.credit);
 
 document.getElementById("creditList").innerHTML=
-list.map(p=>`${p.party} – ${p.creditDays} days`).join("<br>");
+list.map(p=>`${p.party} – ${p.credit} days`).join("<br>");
+
 }
 
-function distance(lat1,lon1,lat2,lon2){
+function distance(a,b,c,d){
 
-if(!lat2 || !lon2) return 999;
+if(!c||!d) return 999;
 
 let R=6371;
-let dLat=(lat2-lat1)*Math.PI/180;
-let dLon=(lon2-lon1)*Math.PI/180;
+let dLat=(c-a)*Math.PI/180;
+let dLon=(d-b)*Math.PI/180;
 
-let a=Math.sin(dLat/2)**2+
-Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*
+let x=Math.sin(dLat/2)**2+
+Math.cos(a*Math.PI/180)*Math.cos(c*Math.PI/180)*
 Math.sin(dLon/2)**2;
 
-return R*(2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a)));
+return R*(2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x)));
+
 }
 
 function runAI(){
 
-if(!userLat){document.getElementById("aiBox").innerHTML="Fetching GPS…";return;}
+if(!userLat){
+document.getElementById("aiBox").innerHTML="📍 Allow location for AI";
+return;
+}
 
-let scored=todayData.map(p=>{
+let best=[...todayData].map(p=>{
 
 let dist=distance(userLat,userLng,p.lat,p.lng);
 
-let score=(p.reactivate*0.6)+(p.creditDays*0.25)-(dist*0.15);
+let score=(p.reactivate*0.6)+(p.credit*0.25)-(dist*0.15);
 
 return {...p,dist,score};
 
 }).sort((a,b)=>b.score-a.score)[0];
 
 document.getElementById("aiBox").innerHTML=
-`🟢 Next Visit:<br><b>${scored.party}</b><br>
-₹${scored.reactivate.toLocaleString()} • ${scored.creditDays} days • ${scored.dist.toFixed(1)} km`;
+`🟢 Next Visit<br><b>${best.party}</b><br>
+₹${best.reactivate.toLocaleString()} • ${best.credit} days • ${best.dist.toFixed(1)} km`;
 
 }
 
-function getLocation(){
+function startJourney(){
+
 navigator.geolocation.getCurrentPosition(pos=>{
+
 userLat=pos.coords.latitude;
 userLng=pos.coords.longitude;
+
+let stops=todayData.filter(p=>p.lat && p.lng);
+
+let routeURL="https://www.google.com/maps/dir/"+userLat+","+userLng+"/"+
+stops.map(p=>p.lat+","+p.lng).join("/");
+
+document.getElementById("mapBox").innerHTML=
+`
+<iframe src="${routeURL}&output=embed"></iframe>
+<a class="btn nav" href="${routeURL}" target="_blank">Open in Google Maps</a>
+`;
+
 runAI();
+
 });
+
 }
 
 function showParty(name){
 
 let p=todayData.find(x=>x.party===name);
 
-document.getElementById("partyCard").innerHTML=`
+document.getElementById("partyCard").innerHTML=
+`
 <b>${p.party}</b><br>${p.area}<br>
-Balance ₹${p.balance.toLocaleString()}<br>
-Credit ${p.creditDays} days<br><br>
+Balance ₹${p.balance.toLocaleString()}<br><br>
 
 <a class="btn call" href="tel:${p.phone}">Call</a>
 <a class="btn wa" href="https://wa.me/91${p.phone}">WhatsApp</a>
