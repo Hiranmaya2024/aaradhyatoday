@@ -6,7 +6,6 @@
 <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
 
 <style>
-
 *{box-sizing:border-box}
 
 body{
@@ -22,42 +21,37 @@ color:#0f172a;
 position:sticky;
 top:0;
 background:white;
-padding:16px 12px 10px;
+padding:10px 8px 6px;
 text-align:center;
 border-bottom:1px solid #e2e8f0;
 z-index:1000;
 }
 
-#tourArea{font-size:13px;color:#64748b;margin-top:2px}
+#tourArea{font-size:11px;color:#64748b;margin-top:2px}
 
-.kpiBar{font-size:15px;font-weight:700;margin-top:6px}
+.kpiBar{font-size:13px;font-weight:700;margin-top:2px}
 
 .progressBox{
 background:#e2e8f0;
-height:5px;
+height:4px;
 border-radius:10px;
-margin:8px auto 2px;
-max-width:220px;
+margin:5px auto 0;
+max-width:180px;
 }
 
-#progressBar{height:5px;border-radius:10px}
+#progressBar{height:4px;border-radius:10px}
 
 /* LAYOUT */
 
-.container{padding:14px;max-width:1100px;margin:auto}
-
-.dashboard-grid{
-display:grid;
-gap:14px;
-grid-template-columns:repeat(auto-fit,minmax(260px,1fr));
-}
+.container{padding:8px;max-width:1000px;margin:auto}
+.dashboard-grid{display:grid;gap:8px;grid-template-columns:1fr}
 
 /* CARDS */
 
 .card{
 background:white;
-padding:16px;
-border-radius:16px;
+padding:10px;
+border-radius:12px;
 border:1px solid #e2e8f0;
 }
 
@@ -67,46 +61,40 @@ border:1px solid #e2e8f0;
 background:#0f766e;
 color:white;
 text-align:center;
-padding:18px;
-border-radius:16px;
-font-size:18px;
+padding:12px;
+border-radius:12px;
+font-size:16px;
 font-weight:700;
+line-height:1.4;
 }
 
-/* ROUTE STATS */
+/* ROUTE MICRO TILES */
 
 .statGrid{
 display:grid;
-grid-template-columns:repeat(2,1fr);
-gap:10px;
-margin-top:10px;
+grid-template-columns:repeat(4,1fr);
+gap:6px;
+margin-top:6px;
 }
 
 .statBox{
 background:#f1f5f9;
-padding:14px 10px;
-border-radius:12px;
+padding:8px 4px;
+border-radius:8px;
 text-align:center;
 }
 
-.statBox b{
-display:block;
-font-size:18px;
-margin-bottom:2px;
-}
-
-.statBox span{
-font-size:12px;
-color:#64748b;
-}
+.statBox b{display:block;font-size:13px}
+.statBox span{font-size:10px;color:#64748b}
 
 /* PARTY LIST */
 
 .partyItem{
 background:white;
-padding:14px;
-border-radius:12px;
-margin-bottom:8px;
+padding:10px;
+border-radius:10px;
+margin-bottom:6px;
+font-size:13px;
 font-weight:600;
 display:flex;
 justify-content:space-between;
@@ -115,10 +103,12 @@ border:1px solid #e2e8f0;
 cursor:pointer;
 }
 
-.partyItem.active{border-left:4px solid #22c55e}
-.partyItem.block{border-left:4px solid #ef4444;background:#fff1f2}
+.partyItem.active{border-left:3px solid #22c55e}
+.partyItem.block{border-left:3px solid #ef4444;background:#fff1f2}
 
 /* PARTY DETAIL */
+
+#partyCard{margin-top:6px}
 
 .blockCard{
 border:1px solid #ef4444;
@@ -128,55 +118,48 @@ background:#fff1f2;
 .unlockBox{
 background:#16a34a;
 color:white;
-padding:10px;
-border-radius:10px;
-margin:10px 0;
+padding:8px;
+border-radius:8px;
+margin:8px 0;
 text-align:center;
+font-size:13px;
 font-weight:700;
 }
 
 .payBox{
 background:#ef4444;
 color:white;
-padding:12px;
-border-radius:12px;
-margin:10px 0;
+padding:9px;
+border-radius:9px;
+margin:8px 0;
 text-align:center;
+font-size:13px;
 font-weight:700;
 }
 
 .recoveryBarBg{
 background:#e2e8f0;
-height:8px;
+height:6px;
 border-radius:10px;
-margin-top:8px;
+margin-top:6px;
 }
 
 .recoveryBar{
-height:8px;
+height:6px;
 background:#ef4444;
 border-radius:10px;
 }
 
-.card b{
-font-size:13px;
-color:#64748b;
-}
-
+.card b{font-size:11px;color:#64748b}
 </style>
 </head>
 
 <body>
 
 <div class="header">
-AARADHYA TODAY
-<div id="tourArea"></div>
-
+AARADHYA • <span id="tourArea"></span>
 <div class="kpiBar" id="fyKPI"></div>
 <div class="progressBox"><div id="progressBar"></div></div>
-
-<button onclick="loadData()">🔄</button>
-<div id="lastUpdated" style="font-size:12px"></div>
 </div>
 
 <div class="container">
@@ -185,40 +168,23 @@ AARADHYA TODAY
 <div class="missionCard" id="smartRecovery"></div>
 
 <div class="card">
-<b>Route Activation</b>
 <div id="reactivationSummary"></div>
 </div>
 
 <div class="card">
-<b>Quick Stats</b>
-<div id="quickStats"></div>
-</div>
-
-<div class="card">
-<b>Today Performance</b>
-<div id="tourStats"></div>
-</div>
-
-<div class="card">
-<b>Today Target</b>
-<div id="dailyTarget"></div>
-</div>
-
-<div class="card">
-<b>Today’s Route Parties</b>
+<b>Today’s Route</b>
 <div id="todayCount"></div>
 <ul id="todayParties"></ul>
+</div>
+
+<div class="card" id="partyCard" style="display:none;">
+<div id="partyDetails"></div>
 </div>
 
 <div class="card">
 <b>Credit Cycle > 45</b>
 <div id="creditCount"></div>
 <ul id="creditExceeded"></ul>
-</div>
-
-<div class="card" id="partyCard" style="display:none;">
-<b>Party Details</b>
-<div id="partyDetails"></div>
 </div>
 
 </div>
@@ -263,12 +229,10 @@ CREDIT:col("avgcreditcycle"),
 REACTIVATE:col("paymentneededtoreactivate")
 };
 
-let fyBusiness=0,fyBalance=0,mtdBusiness=0,mtdCollection=0;
-let tourBalance=0,tourBusiness=0,tourCollection=0;
+let fyBusiness=0,fyBalance=0,tourBalance=0;
+let blockCount=0,totalReactivate=0,unlockBusiness=0;
 
-let blockCount=0,totalReactivate=0,totalRecovered=0,unlockBusiness=0;
-
-let smartList=[],todayList=[],creditList=[];
+let todayList=[],creditList=[];
 
 sheetData.forEach(r=>{
 
@@ -276,33 +240,25 @@ let status=(r[COL.STATUS]||"").toUpperCase();
 
 fyBusiness+=cleanNumber(r[COL.BUSINESS]);
 fyBalance+=cleanNumber(r[COL.BALANCE]);
-mtdBusiness+=cleanNumber(r[COL.BUSINESS_MTD]);
-mtdCollection+=cleanNumber(r[COL.COLLECTION_MTD]);
 
 if(todayAreas.includes((r[COL.AREA]||"").toUpperCase())){
 
 tourBalance+=cleanNumber(r[COL.BALANCE]);
-tourCollection+=cleanNumber(r[COL.COLLECTION_MTD]);
-tourBusiness+=cleanNumber(r[COL.BUSINESS_MTD]);
 
-todayList.push({name:r[COL.PARTY],balance:cleanNumber(r[COL.BALANCE]),status});
+todayList.push({
+name:r[COL.PARTY],
+balance:cleanNumber(r[COL.BALANCE]),
+status
+});
 
 if(cleanNumber(r[COL.CREDIT])>45){
 creditList.push({name:r[COL.PARTY],credit:r[COL.CREDIT]});
 }
 
 if(status==="BLOCK"){
-let target=cleanNumber(r[COL.REACTIVATE]);
-let recovered=cleanNumber(r[COL.COLLECTION_MTD]);
-let remaining=target-recovered;
-if(remaining<0)remaining=0;
-
 blockCount++;
-totalReactivate+=target;
-totalRecovered+=recovered;
+totalReactivate+=cleanNumber(r[COL.REACTIVATE]);
 unlockBusiness+=cleanNumber(r[COL.BUSINESS]);
-
-smartList.push({name:r[COL.PARTY],remaining,unlock:cleanNumber(r[COL.BUSINESS])});
 }
 
 }
@@ -313,35 +269,24 @@ let fyCollection=fyBusiness-fyBalance;
 let percent=(fyCollection/fyBusiness)*100;
 
 document.getElementById("fyKPI").innerHTML=
-`₹${Math.round(fyBusiness).toLocaleString()} &nbsp; ₹${Math.round(fyCollection).toLocaleString()} &nbsp; ${percent.toFixed(0)}%`;
+`₹${Math.round(fyBusiness).toLocaleString()} | ₹${Math.round(fyCollection).toLocaleString()} | ${percent.toFixed(0)}%`;
 
 let bar=document.getElementById("progressBar");
 bar.style.width=percent+"%";
 bar.style.background=percent<40?"#ef4444":percent<70?"#f97316":"#22c55e";
 
-document.getElementById("quickStats").innerHTML=
-`MTD Business ₹${Math.round(mtdBusiness).toLocaleString()}<br>
-MTD Collection ₹${Math.round(mtdCollection).toLocaleString()}`;
-
-document.getElementById("tourStats").innerHTML=
-`Business ₹${Math.round(tourBusiness).toLocaleString()}<br>
-Collection ₹${Math.round(tourCollection).toLocaleString()}`;
-
-document.getElementById("dailyTarget").innerText=
-"₹"+Math.round(tourBalance*0.30).toLocaleString();
-
 document.getElementById("smartRecovery").innerHTML=
-`TODAY’S MISSION<br>Collect ₹${Math.round(tourBalance*0.30).toLocaleString()}<br>Unlock ₹${Math.round(unlockBusiness).toLocaleString()}`;
+`TODAY<br>Collect ₹${Math.round(tourBalance*0.30).toLocaleString()}<br>Unlock ₹${Math.round(unlockBusiness).toLocaleString()}`;
 
 document.getElementById("reactivationSummary").innerHTML=`
 <div class="statGrid">
-<div class="statBox"><b>${blockCount}</b><span>Blocked</span></div>
-<div class="statBox"><b>${todayList.length-blockCount}</b><span>Active</span></div>
-<div class="statBox"><b>₹${Math.round(totalReactivate).toLocaleString()}</b><span>Target</span></div>
-<div class="statBox"><b>₹${Math.round(unlockBusiness).toLocaleString()}</b><span>Unlock</span></div>
+<div class="statBox"><b>${blockCount}</b><span>BLK</span></div>
+<div class="statBox"><b>${todayList.length-blockCount}</b><span>ACT</span></div>
+<div class="statBox"><b>₹${Math.round(totalReactivate).toLocaleString()}</b><span>TGT</span></div>
+<div class="statBox"><b>₹${Math.round(unlockBusiness).toLocaleString()}</b><span>UNL</span></div>
 </div>`;
 
-document.getElementById("todayCount").innerHTML=`Total Parties: ${todayList.length}`;
+document.getElementById("todayCount").innerText=`${todayList.length} Parties`;
 
 document.getElementById("todayParties").innerHTML=
 todayList.map(p=>`
@@ -350,15 +295,12 @@ ${p.name}
 <span>₹${p.balance.toLocaleString()}</span>
 </li>`).join("");
 
-document.getElementById("creditCount").innerHTML=`Total: ${creditList.length}`;
+document.getElementById("creditCount").innerText=`${creditList.length}`;
 
 document.getElementById("creditExceeded").innerHTML=
 creditList.map(c=>`<li class="partyItem">${c.name}<span>${c.credit}d</span></li>`).join("");
 
-document.getElementById("lastUpdated").innerText="Last updated: "+new Date().toLocaleTimeString();
-
 }
-
 });
 }
 
@@ -382,19 +324,17 @@ card.style.display="block";
 card.classList.toggle("blockCard",isBlock);
 
 document.getElementById("partyDetails").innerHTML=`
-<b>${name}</b><br><br>
-Area: ${party[COL.AREA]}<br>
-Status: ${party[COL.STATUS]}<br>
+<b>${name}</b><br>
+${party[COL.AREA]}<br><br>
 
 ${isBlock?`
-<div class="unlockBox">Unlock Billing Potential ₹${balance.toLocaleString()}</div>
-<div class="payBox">Pay ₹${remaining.toLocaleString()} to Unblock</div>
+<div class="unlockBox">Unlock ₹${balance.toLocaleString()}</div>
+<div class="payBox">Pay ₹${remaining.toLocaleString()}</div>
 <div class="recoveryBarBg"><div class="recoveryBar" style="width:${progress}%"></div></div>
-<div>${progress.toFixed(0)}% completed</div>
+<div>${progress.toFixed(0)}%</div>
 `:""}
 
-Balance ₹${balance.toLocaleString()}<br>
-MTD Collection ₹${recovered.toLocaleString()}
+Bal ₹${balance.toLocaleString()} | MTD ₹${recovered.toLocaleString()}
 `;
 }
 
