@@ -1,7 +1,6 @@
 <!DOCTYPE html>
 <html>
 <head>
-
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
@@ -9,33 +8,18 @@
 <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
 
 <style>
-
 body{margin:0;font-family:Arial;background:#f1f5f9}
-
-.panel{
-padding:12px;
-background:#fff;
-box-shadow:0 2px 6px rgba(0,0,0,0.15);
-}
-
+.panel{padding:12px;background:#fff;box-shadow:0 2px 6px rgba(0,0,0,0.15);}
 #map{height:60vh}
-
 select,button{
-width:100%;
-padding:14px;
-margin-top:8px;
-border-radius:10px;
-border:none;
-font-size:16px;
-font-weight:bold;
+width:100%;padding:14px;margin-top:8px;border-radius:10px;
+border:none;font-size:16px;font-weight:bold;
 }
-
 .start{background:#16a34a;color:#fff}
 .collect{background:#2563eb;color:#fff}
 .complete{background:#f97316;color:#fff}
 .expense{background:#7c3aed;color:#fff}
 .end{background:#dc2626;color:#fff}
-
 </style>
 </head>
 
@@ -49,6 +33,7 @@ font-weight:bold;
 const CSV="https://docs.google.com/spreadsheets/d/e/2PACX-1vQ3bMMFf71-vdGNiWFnf7pD9XuAAUSA7J-g08ocyC2LNiVOTUHi56lB-7bKTKj0KK9nJGs9vU0THQ0E/pub?gid=1044390124&single=true&output=csv";
 
 const SPEED=50;
+const ARRIVAL_RADIUS=0.05;
 
 const tourPlan={
 MONDAY:["JURIA"],
@@ -62,12 +47,13 @@ SATURDAY:["PAIKMAL","MANDOSIL"]
 let map=L.map('map').setView([20.9,83.4],11);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
-let data=[],today=[],pending=[],visited=[];
-let partyMarkers=[],routeLine;
-
 let userLat=20.9,userLng=83.4;
+let startLat,startLng,userMarker;
 
-let journeyStart,visitStart,currentParty,expense=0,stage="idle";
+let data=[],today=[],pending=[],visited=[];
+let routeLine,partyMarkers=[];
+
+let journeyStart,visitStart,currentParty,expense=0;
 
 const num=v=>Number(String(v||"").replace(/[^0-9.-]/g,""))||0;
 
@@ -82,24 +68,26 @@ Math.sin(dLon/2)**2;
 return R*(2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x)));
 }
 
-navigator.geolocation.getCurrentPosition(pos=>{
-userLat=pos.coords.latitude;
-userLng=pos.coords.longitude;
-map.setView([userLat,userLng],13);
-L.marker([userLat,userLng]).addTo(map);
-loadCSV();
-},()=>loadCSV());
-
 function setPanel(html){panel.innerHTML=html;}
 
+navigator.geolocation.watchPosition(pos=>{
+userLat=pos.coords.latitude;
+userLng=pos.coords.longitude;
+
+if(userMarker) map.removeLayer(userMarker);
+userMarker=L.marker([userLat,userLng]).addTo(map);
+
+map.setView([userLat,userLng]);
+
+checkArrival();
+
+});
+
 function loadCSV(){
-
 setPanel("⏳ Loading data…");
-
 Papa.parse(CSV,{
 download:true,header:true,
 complete:(res)=>{
-
 data=res.data.map(r=>({
 party:r.PARTY,
 area:(r.AREA||"").toUpperCase(),
@@ -108,62 +96,50 @@ lng:num(r.LNG),
 balance:num(r.BALANCE),
 credit:num(r["AVG CREDIT CYCLE"])
 })).filter(x=>x.party);
-
-renderDay("MONDAY");
-
+renderDay(getToday());
 }
 });
+}
 
+function getToday(){
+return new Date().toLocaleDateString("en-US",{weekday:"long"}).toUpperCase();
 }
 
 function renderDay(day){
-
 today=data.filter(d=>tourPlan[day].some(a=>d.area.includes(a)));
-
 pending=[...today];
 visited=[];
-
 drawPins();
 
 setPanel(`
 <select onchange="renderDay(this.value)">
 ${Object.keys(tourPlan).map(d=>`<option ${d==day?"selected":""}>${d}</option>`)}
 </select>
-
-<b>${day}</b><br>
-🏪 ${today.length} parties
-
+<b>${day}</b><br>🏪 ${today.length}
 <button class="start" onclick="startTour()">START TOUR</button>
 `);
-
 }
 
 function drawPins(){
-
 partyMarkers.forEach(m=>map.removeLayer(m));
 partyMarkers=[];
-
-let bounds=[];
-
 today.forEach(p=>{
 if(p.lat&&p.lng){
 partyMarkers.push(L.circleMarker([p.lat,p.lng],{radius:6,color:"green"}).addTo(map));
-bounds.push([p.lat,p.lng]);
 }
 });
-
-if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
-
 }
 
 function startTour(){
+startLat=userLat;
+startLng=userLng;
 journeyStart=new Date();
 updateNext();
 }
 
 function updateNext(){
 
-if(!pending.length){askExpense();return;}
+if(!pending.length){returnToStart();return;}
 
 pending.forEach(p=>p.dist=getDistance(userLat,userLng,p.lat,p.lng));
 pending.sort((a,b)=>a.dist-b.dist);
@@ -176,14 +152,19 @@ let eta=pending.reduce((a,b)=>a+b.dist,0)/SPEED;
 
 setPanel(`
 <b>Next:</b> ${currentParty.party}<br>
-₹${currentParty.balance} | ${currentParty.credit} days<br>
 📍 ${currentParty.dist.toFixed(2)} km<br>
 ⏱ ETA ${eta.toFixed(2)} hr
 <button class="start" onclick="startVisit()">START VISIT</button>
 `);
+}
 
-stage="start";
-
+function checkArrival(){
+if(currentParty){
+let d=getDistance(userLat,userLng,currentParty.lat,currentParty.lng);
+if(d<ARRIVAL_RADIUS){
+alert("Reached "+currentParty.party);
+}
+}
 }
 
 function startVisit(){
@@ -197,22 +178,22 @@ setPanel(panel.innerHTML+`<button class="complete" onclick="completeVisit()">COM
 }
 
 function completeVisit(){
-
 let d=getDistance(userLat,userLng,currentParty.lat,currentParty.lng);
-
 visited.push({...currentParty,distance:d,time:(new Date()-visitStart)/1000});
-
 pending.shift();
-
 userLat=currentParty.lat;
 userLng=currentParty.lng;
-
 updateNext();
-
 }
 
-function askExpense(){
+function returnToStart(){
+drawRouteBack();
 setPanel(`<button class="expense" onclick="saveExpense()">ENTER TOUR EXPENSE</button>`);
+}
+
+function drawRouteBack(){
+if(routeLine)map.removeLayer(routeLine);
+routeLine=L.polyline([[userLat,userLng],[startLat,startLng]],{color:"red"}).addTo(map);
 }
 
 function saveExpense(){
@@ -226,38 +207,20 @@ let totalCollection=visited.reduce((a,b)=>a+(b.amount||0),0);
 let totalDistance=visited.reduce((a,b)=>a+b.distance,0);
 let totalTime=(new Date()-journeyStart)/3600000;
 
+let msg=`Tour Summary
+Distance: ${totalDistance.toFixed(2)} km
+Collection: ₹${totalCollection}
+Expense: ₹${expense}
+Net: ₹${totalCollection-expense}`;
+
 setPanel(`
 <h3>FINAL REPORT</h3>
-
-📍 ${totalDistance.toFixed(2)} km<br>
-💰 ₹${totalCollection}<br>
-💸 ₹${expense}<br>
-🧾 ₹${totalCollection-expense}<br>
-⏱ ${totalTime.toFixed(2)} hr<br>
-📊 ₹${(totalCollection/totalDistance||0).toFixed(0)}/km
+${msg}
+<button onclick="window.open('https://wa.me/?text='+encodeURIComponent('${msg}'))">📄 SHARE WHATSAPP</button>
 `);
-
 }
 
-function drawRoute(){
-
-if(routeLine)map.removeLayer(routeLine);
-
-let route=[[userLat,userLng]];
-let lat=userLat,lng=userLng;
-let temp=[...pending];
-
-while(temp.length){
-temp.forEach(p=>p.d=getDistance(lat,lng,p.lat,p.lng));
-temp.sort((a,b)=>a.d-b.d);
-let n=temp.shift();
-route.push([n.lat,n.lng]);
-lat=n.lat;lng=n.lng;
-}
-
-routeLine=L.polyline(route,{color:"blue"}).addTo(map);
-
-}
+loadCSV();
 
 </script>
 </body>
