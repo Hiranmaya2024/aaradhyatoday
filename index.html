@@ -12,34 +12,52 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
 <style>
+
 body{font-family:Arial;margin:0;background:#f1f5f9}
+
 .header{background:#fff;padding:10px;text-align:center;border-bottom:1px solid #ddd}
-.main{display:flex;height:calc(100vh - 120px)}
+
+.main{display:flex;height:calc(100vh - 110px)}
+
 .left{width:40%;overflow:auto;background:#fff}
+
 .right{width:60%;padding:10px}
+
 .card{background:#fff;padding:12px;border-radius:10px;margin-bottom:10px}
+
 #map{height:260px;border-radius:10px}
 
 .party{padding:10px;border-bottom:1px solid #eee;cursor:pointer}
+
 .block{border-left:4px solid red}
+
 .active{border-left:4px solid green}
 
-.btn{padding:8px 12px;border:none;border-radius:8px;color:#fff;margin:5px 5px 0 0}
+.progressBar{height:10px;background:#e5e7eb;border-radius:10px;margin-top:6px}
+
+.progressFill{height:100%;background:#16a34a;width:0%}
+
+.bigBtn{
+width:100%;
+padding:18px;
+font-size:18px;
+font-weight:bold;
+border:none;
+border-radius:12px;
+color:#fff;
+}
+
 .stop{background:#f97316}
 .collect{background:#2563eb}
 .go{background:#16a34a}
-.disabled{background:#9ca3af}
 
-.progressBar{height:10px;background:#e5e7eb;border-radius:10px;margin-top:6px}
-.progressFill{height:100%;background:#16a34a;width:0%}
-
-.modeBtn{padding:6px 10px;border:none;border-radius:6px;margin:3px}
-.activeMode{background:#16a34a;color:#fff}
+.rightAlign{display:flex;justify-content:flex-end}
 
 @media(max-width:768px){
 .main{flex-direction:column}
 .left,.right{width:100%}
 }
+
 </style>
 </head>
 
@@ -50,12 +68,6 @@ body{font-family:Arial;margin:0;background:#f1f5f9}
 <b>Select Day:</b>
 <select id="daySelect"></select>
 
-<br><br>
-
-Mode:
-<button class="modeBtn activeMode" id="liveBtn" onclick="setMode('live')">LIVE</button>
-<button class="modeBtn" id="testBtn" onclick="setMode('test')">TEST</button>
-
 <div id="areaInfo"></div>
 
 </div>
@@ -63,15 +75,23 @@ Mode:
 <div class="main">
 
 <div class="left">
+
 <div class="card" id="planBox"></div>
+
 <div class="card" id="summary"></div>
+
 <div id="partyList"></div>
+
 </div>
 
 <div class="right">
+
 <div class="card" id="aiBox"></div>
+
 <div id="map"></div>
+
 <div class="card" id="partyCard"></div>
+
 </div>
 
 </div>
@@ -79,18 +99,6 @@ Mode:
 <script>
 
 const CSV="https://docs.google.com/spreadsheets/d/e/2PACX-1vQ3bMMFf71-vdGNiWFnf7pD9XuAAUSA7J-g08ocyC2LNiVOTUHi56lB-7bKTKj0KK9nJGs9vU0THQ0E/pub?gid=1044390124&single=true&output=csv";
-
-let MODE="live";
-
-function setMode(m){
-MODE=m;
-liveBtn.classList.toggle("activeMode",m==="live");
-testBtn.classList.toggle("activeMode",m==="test");
-render();
-}
-
-const SPEED=50;
-const VISIT_MIN=15;
 
 const tourPlan={
 MONDAY:["JURIA"],
@@ -105,8 +113,8 @@ let map=L.map('map').setView([20.9,83.4],10);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
 let data=[],today=[],visits=[],markers=[];
-let userLat=20.9,userLng=83.4,totalDistance=0,journeyStartTime=null;
-let visitState={};
+let userLat=20.9,userLng=83.4,totalDistance=0;
+let stage="stop",visitState={},visitStart,visitAmount=0;
 
 const num=v=>Number(String(v||0).replace(/[^0-9.-]/g,""))||0;
 
@@ -137,7 +145,6 @@ area:r.AREA.toUpperCase(),
 status:r["ACCOUNT STATUS"],
 balance:num(r.BALANCE),
 credit:num(r["AVG CREDIT CYCLE"]),
-reactivate:num(r["Payment needed to Reactivate"]),
 lat:parseFloat(r.LAT),
 lng:parseFloat(r.LNG)
 })).filter(x=>x.party);
@@ -145,46 +152,25 @@ render();
 }});
 }
 
-function resetRoute(){
-
-visits=[];
-totalDistance=0;
-journeyStartTime=null;
-markers.forEach(m=>map.removeLayer(m));
-markers=[];
-userLat=20.9;
-userLng=83.4;
-}
-
 function render(){
 
-resetRoute();
+visits=[];
+markers.forEach(m=>map.removeLayer(m));
+markers=[];
 
 let areas=tourPlan[daySelect.value];
 areaInfo.innerHTML="Areas → "+areas.join(", ");
 
 today=data.filter(d=>areas.some(a=>d.area.includes(a)));
 
-generateTourPlan();
-renderSummary();
+planBox.innerHTML=`🧭 Parties: ${today.length}`;
 
 partyList.innerHTML=today.map(p=>`
-<div class="party ${p.status==="BLOCK"?"block":"active"}"
-onclick="showParty('${p.party}')">${p.party}</div>`).join("");
+<div class="party ${p.status==="BLOCK"?"block":"active"}">${p.party}</div>`).join("");
 
 drawMap();
 nextVisit();
-}
-
-function generateTourPlan(){
-
-let expected=today.reduce((a,b)=>a+b.reactivate,0);
-
-planBox.innerHTML=`
-<h3>🧭 Tour Plan</h3>
-💰 ₹${expected}<br>
-📍 Parties ${today.length}
-`;
+renderSummary();
 }
 
 function drawMap(){
@@ -192,9 +178,11 @@ function drawMap(){
 let bounds=[];
 
 today.forEach(p=>{
+
 if(isNaN(p.lat))return;
 
 let color="green";
+
 if(visits.find(v=>v.party===p.party))color="grey";
 else if(visitState.current?.party===p.party)color="gold";
 else if(p.status==="BLOCK")color="red";
@@ -203,64 +191,84 @@ let marker=L.circleMarker([p.lat,p.lng],{radius:8,color:color}).addTo(map);
 
 markers.push(marker);
 bounds.push([p.lat,p.lng]);
+
 });
 
 if(bounds.length)map.fitBounds(bounds);
+
 }
 
 function nextVisit(){
 
-let pending=today.filter(p=>!visits.find(v=>v.party===p.party)&&!isNaN(p.lat));
+let pending=today.filter(p=>!visits.find(v=>v.party===p.party));
 
 if(!pending.length){
 generateFinalReport();
 return;
 }
 
-pending.forEach(p=>p.distance=getDistance(userLat,userLng,p.lat,p.lng));
-pending.sort((a,b)=>a.distance-b.distance);
-
 let p=pending[0];
 
-visitState={current:p};
+visitState.current=p;
+stage="stop";
 
 aiBox.innerHTML=`
-<h3>⭐ ${p.party}</h3>
-₹${p.balance} | ${p.credit} days<br>
-📍 ${p.distance.toFixed(2)} km<br><br>
 
-<button class="btn stop" onclick="startVisit()">STOP</button>
-<button class="btn collect disabled" id="collectBtn" onclick="collect()">COLLECT</button>
-<button class="btn go disabled" id="goBtn" onclick="endVisit()">GO</button>
+<h3>${p.party}</h3>
+
+₹${p.balance} | ${p.credit} days
+
+<div class="rightAlign">
+
+<button id="actionBtn" onclick="nextStage()" class="bigBtn stop">🟠 START VISIT</button>
+
+</div>
+
 `;
 
-drawMap();
 }
 
-function startVisit(){
-if(!journeyStartTime)journeyStartTime=new Date();
-collectBtn.classList.remove("disabled");
+function nextStage(){
+
+if(stage==="stop"){
+stage="collect";
+visitStart=new Date();
+actionBtn.innerHTML="🔵 ENTER COLLECTION";
+actionBtn.className="bigBtn collect";
+return;
 }
 
-function collect(){
-visitState.amount=num(prompt("Enter amount"));
-goBtn.classList.remove("disabled");
+if(stage==="collect"){
+visitAmount=num(prompt("Enter collection"));
+stage="go";
+actionBtn.innerHTML="🟢 COMPLETE VISIT";
+actionBtn.className="bigBtn go";
+return;
 }
 
-function endVisit(){
+if(stage==="go"){
+completeVisit();
+stage="stop";
+}
 
-visits.push({party:visitState.current.party,amount:visitState.amount||0});
+}
+
+function completeVisit(){
+
+visits.push({party:visitState.current.party,amount:visitAmount||0});
 
 userLat=visitState.current.lat;
 userLng=visitState.current.lng;
 
 renderSummary();
 nextVisit();
+drawMap();
 }
 
 function renderSummary(){
 
 let collected=visits.reduce((a,b)=>a+b.amount,0);
+
 let progress=today.length?(visits.length/today.length)*100:0;
 
 summary.innerHTML=`
@@ -268,26 +276,63 @@ summary.innerHTML=`
 Visits ${visits.length}/${today.length}
 <div class="progressBar"><div class="progressFill" style="width:${progress}%"></div></div>
 `;
+
 }
 
 async function generateFinalReport(){
 
-let totalCollection=visits.reduce((a,b)=>a+b.amount,0);
-let totalTime=(new Date()-journeyStartTime)/3600000;
-let recoveryPerKm=totalDistance?(totalCollection/totalDistance).toFixed(0):0;
+await new Promise(r=>setTimeout(r,800));
 
-aiBox.innerHTML=`
-<h2>🏁 Route Completed</h2>
-💰 ₹${totalCollection}<br>
-⏱ ${totalTime.toFixed(2)} hrs<br>
-🏪 ${visits.length}<br>
-📊 ₹${recoveryPerKm}/km
-`;
+let canvas=await html2canvas(map.getContainer());
+
+let img=canvas.toDataURL("image/png");
+
+let totalCollection=visits.reduce((a,b)=>a+b.amount,0);
+
+let msg=`🏁 Route Completed
+💰 ₹${totalCollection}
+🏪 ${visits.length} visits`;
+
+let wa=`https://wa.me/?text=${encodeURIComponent(msg)}`;
+
+const { jsPDF } = window.jspdf;
+
+let pdf=new jsPDF();
+
+pdf.text("Tour Report",20,20);
+
+pdf.addImage(img,'PNG',15,30,180,80);
+
+window.downloadPDF=()=>pdf.save("Tour_Report.pdf");
+
+function downloadImage(){
+
+let a=document.createElement("a");
+
+a.href=img;
+
+a.download="Route_Map.png";
+
+a.click();
+
 }
 
-function showParty(name){
-let p=data.find(x=>x.party===name);
-partyCard.innerHTML=`<h3>${p.party}</h3>₹${p.balance}`;
+aiBox.innerHTML=`
+
+<h2>🏁 Route Completed</h2>
+
+<img src="${img}" style="width:100%"><br><br>
+
+<a href="${wa}" target="_blank">
+<button class="bigBtn go">📤 Share on WhatsApp</button>
+</a>
+
+<button onclick="downloadPDF()" class="bigBtn collect">📄 Download PDF</button>
+
+<button onclick="downloadImage()" class="bigBtn stop">🖼 Download Map Image</button>
+
+`;
+
 }
 
 load();
