@@ -3,37 +3,100 @@
 <head>
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AARADHYA TODAY</title>
+<title>AARADHYA SMART TOUR</title>
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 
 <style>
+
 body{font-family:Arial;margin:0;background:#f1f5f9}
-.header{background:#fff;padding:10px;text-align:center;border-bottom:1px solid #ddd}
-.main{display:flex;height:calc(100vh - 90px)}
-.left{width:40%;overflow:auto;background:#fff}
-.right{width:60%;padding:10px}
-.card{background:#fff;padding:12px;border-radius:10px;margin-bottom:10px}
+
+.header{
+background:#fff;
+padding:10px;
+text-align:center;
+border-bottom:1px solid #ddd
+}
+
+.main{
+display:flex;
+height:calc(100vh - 90px)
+}
+
+.left{
+width:40%;
+overflow:auto;
+background:#fff
+}
+
+.right{
+width:60%;
+padding:10px
+}
+
+.card{
+background:#fff;
+padding:12px;
+border-radius:10px;
+margin-bottom:10px
+}
+
 #map{height:260px;border-radius:10px}
-.party{padding:10px;border-bottom:1px solid #eee;cursor:pointer}
+
+.party{
+padding:10px;
+border-bottom:1px solid #eee;
+cursor:pointer
+}
+
 .block{border-left:4px solid red}
 .active{border-left:4px solid green}
-small{color:#555}
-@media(max-width:768px){.main{flex-direction:column}.left,.right{width:100%}}
-</style>
 
+.btn{
+padding:8px 12px;
+border:none;
+border-radius:8px;
+color:#fff;
+margin:5px 5px 0 0
+}
+
+.stop{background:#f97316}
+.collect{background:#2563eb}
+.go{background:#16a34a}
+.disabled{background:#9ca3af}
+
+.progressBar{
+height:10px;
+background:#e5e7eb;
+border-radius:10px;
+overflow:hidden;
+margin-top:6px
+}
+
+.progressFill{
+height:100%;
+background:#16a34a;
+width:0%
+}
+
+@media(max-width:768px){
+.main{flex-direction:column}
+.left,.right{width:100%}
+}
+
+</style>
 </head>
+
 <body>
 
 <div class="header">
 
 <b>Select Day:</b>
 <select id="daySelect"></select>
-
 <div id="areaInfo"></div>
-<small id="allAreas"></small>
 
 </div>
 
@@ -45,8 +108,11 @@ small{color:#555}
 </div>
 
 <div class="right">
+
+<div class="card" id="aiBox">Start journey</div>
 <div id="map"></div>
 <div class="card" id="partyCard">Select a party</div>
+
 </div>
 
 </div>
@@ -64,14 +130,27 @@ FRIDAY:["PADAMPUR"],
 SATURDAY:["PAIKMAL","MANDOSIL"]
 };
 
-let map = L.map('map').setView([20.9,83.4],10);
+let map=L.map('map').setView([20.9,83.4],10);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
-let data=[],today=[],markers=[];
+let data=[],today=[],visits=[],markers=[];
+let userLat=20.9,userLng=83.4;
+let totalDistance=0,journeyStartTime=null,totalStops=0;
+
+let visitState={current:null,startTime:null,amount:0};
 
 const num=v=>Number(String(v||0).replace(/[^0-9.-]/g,""))||0;
 
-// DAY DROPDOWN
+function getDistance(a,b,c,d){
+const R=6371;
+const dLat=(c-a)*Math.PI/180;
+const dLon=(d-b)*Math.PI/180;
+const x=Math.sin(dLat/2)**2+
+Math.cos(a*Math.PI/180)*Math.cos(c*Math.PI/180)*
+Math.sin(dLon/2)**2;
+return R*(2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x)));
+}
+
 Object.keys(tourPlan).forEach(d=>{
 daySelect.innerHTML+=`<option value="${d}">${d}</option>`;
 });
@@ -80,104 +159,164 @@ daySelect.value=new Date().toLocaleDateString("en-US",{weekday:"long"}).toUpperC
 daySelect.onchange=render;
 
 function load(){
-
 Papa.parse(CSV,{
 download:true,
 header:true,
 skipEmptyLines:true,
 complete:res=>{
-
 data=res.data.map(r=>({
-
 party:(r["PARTY"]||"").trim(),
 area:(r["AREA"]||"").toUpperCase().trim(),
 status:(r["ACCOUNT STATUS"]||"").trim(),
 balance:num(r["BALANCE"]),
 credit:num(r["AVG CREDIT CYCLE"]),
+reactivate:num(r["Payment needed to Reactivate"]),
 lat:parseFloat(r["LAT"]),
 lng:parseFloat(r["LNG"])
-
 })).filter(x=>x.party);
-
-// show all unique areas for debugging
-let uniqueAreas=[...new Set(data.map(d=>d.area))];
-allAreas.innerHTML="Sheet Areas → "+uniqueAreas.join(", ");
-
 render();
-
 }
 });
-
 }
 
 function render(){
 
-let selectedDay=daySelect.value;
-let plannedAreas=tourPlan[selectedDay];
+let areas=tourPlan[daySelect.value];
+areaInfo.innerHTML="Areas → "+areas.join(", ");
 
-areaInfo.innerHTML="Planned Areas → "+plannedAreas.join(", ");
+today=data.filter(d=>areas.some(a=>d.area.includes(a)));
+totalStops=today.length;
 
-// SMART MATCH
-today=data.filter(d=>
-plannedAreas.some(a=>d.area.includes(a))
-);
-
-summary.innerHTML=`Total Parties: <b>${today.length}</b>`;
+renderSummary();
 
 partyList.innerHTML=today.map(p=>`
 <div class="party ${p.status==="BLOCK"?"block":"active"}"
-onclick="showParty('${p.party}')">
-${p.party}<br>₹${p.balance}
-</div>`).join("");
+onclick="showParty('${p.party}')">${p.party}</div>`).join("");
 
 drawMap();
+nextVisit();
+}
 
+function renderSummary(){
+let collected=visits.reduce((a,b)=>a+b.amount,0);
+let recoverable=today.reduce((a,b)=>a+b.reactivate,0)-collected;
+let progress=totalStops?(visits.length/totalStops)*100:0;
+
+summary.innerHTML=`
+💰 Collected ₹${collected}<br>
+🎯 Remaining ₹${recoverable}<br>
+📊 Progress ${progress.toFixed(0)}%
+<div class="progressBar"><div class="progressFill" style="width:${progress}%"></div></div>
+`;
 }
 
 function drawMap(){
-
 markers.forEach(m=>map.removeLayer(m));
 markers=[];
 
 let bounds=[];
 
 today.forEach(p=>{
+if(isNaN(p.lat)||isNaN(p.lng))return;
 
-if(isNaN(p.lat)||isNaN(p.lng)) return;
+let color="green";
+if(visits.find(v=>v.party===p.party))color="grey";
+else if(visitState.current&&visitState.current.party===p.party)color="gold";
+else if(p.status==="BLOCK")color="red";
 
-let marker=L.circleMarker([p.lat,p.lng],{
-radius:8,
-color:p.status==="BLOCK"?"red":"green",
-fillOpacity:0.9
-})
+let marker=L.circleMarker([p.lat,p.lng],{radius:8,color:color,fillOpacity:0.9})
 .addTo(map)
 .on("click",()=>showParty(p.party));
 
 markers.push(marker);
 bounds.push([p.lat,p.lng]);
-
 });
 
-if(bounds.length) map.fitBounds(bounds);
+if(bounds.length)map.fitBounds(bounds);
+}
 
+function nextVisit(){
+
+let pending=today.filter(p=>!visits.find(v=>v.party===p.party)&&!isNaN(p.lat));
+
+if(!pending.length){generateFinalReport();return;}
+
+let refLat=userLat,refLng=userLng;
+
+pending.forEach(p=>{
+p.distance=getDistance(refLat,refLng,p.lat,p.lng);
+});
+
+pending.sort((a,b)=>(a.distance-b.distance)||(b.balance-a.balance));
+
+let p=pending[0];
+
+visitState={current:p,startTime:null,amount:0};
+
+aiBox.innerHTML=`
+<h3>⭐ ${p.party}</h3>
+₹${p.balance} || ${p.credit} days<br>
+📍 ${p.distance.toFixed(2)} km<br><br>
+
+<button class="btn stop" onclick="startVisit()">STOP</button>
+<button class="btn collect disabled" id="collectBtn" onclick="collect()">COLLECT</button>
+<button class="btn go disabled" id="goBtn" onclick="endVisit()">GO</button>
+`;
+
+drawMap();
+}
+
+function startVisit(){
+if(!journeyStartTime)journeyStartTime=new Date();
+visitState.startTime=new Date();
+collectBtn.classList.remove("disabled");
+}
+
+function collect(){
+visitState.amount=num(prompt("Enter amount"));
+goBtn.classList.remove("disabled");
+}
+
+function endVisit(){
+
+visits.push({party:visitState.current.party,amount:visitState.amount});
+
+if(visits.length>1){
+let prev=data.find(p=>p.party===visits[visits.length-2].party);
+totalDistance+=getDistance(prev.lat,prev.lng,visitState.current.lat,visitState.current.lng);
+}
+
+userLat=visitState.current.lat;
+userLng=visitState.current.lng;
+
+renderSummary();
+nextVisit();
+}
+
+function generateFinalReport(){
+
+let totalCollection=visits.reduce((a,b)=>a+b.amount,0);
+let totalTime=(new Date()-journeyStartTime)/1000;
+
+html2canvas(document.getElementById("map")).then(canvas=>{
+aiBox.innerHTML=`
+<h2>🏁 Route Completed</h2>
+<img src="${canvas.toDataURL()}" style="width:100%;border-radius:10px"><br><br>
+📍 Distance: <b>${totalDistance.toFixed(2)} km</b><br>
+💰 Collection: <b>₹${totalCollection}</b><br>
+⏱ Time: <b>${(totalTime/3600).toFixed(2)} hrs</b><br>
+🏪 Visits: <b>${visits.length}</b>
+`;
+});
 }
 
 function showParty(name){
-
 let p=data.find(x=>x.party===name);
-
-partyCard.innerHTML=`
-<h3>${p.party}</h3>
-Area: ${p.area}<br>
-Outstanding ₹${p.balance}<br>
-Credit ${p.credit} days
-`;
-
+partyCard.innerHTML=`<h3>${p.party}</h3>Outstanding ₹${p.balance}<br>Credit ${p.credit} days`;
 }
 
 load();
 
 </script>
-
 </body>
 </html>
