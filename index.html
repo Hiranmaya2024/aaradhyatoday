@@ -1,52 +1,30 @@
 <!DOCTYPE html>
 <html>
 <head>
-
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>LIVE MR NAVIGATION</title>
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
 
 <style>
-
-body{margin:0;font-family:Arial;background:#f1f5f9}
-
+body{margin:0;font-family:Arial}
 #map{height:100vh}
-
 .panel{
 position:absolute;
-top:10px;
-left:10px;
-right:10px;
-background:#fff;
-padding:12px;
-border-radius:12px;
-z-index:1000;
+top:10px;left:10px;right:10px;
+background:#fff;padding:12px;border-radius:10px;z-index:1000;
 }
-
-.bigBtn{
-width:100%;
-padding:14px;
-border:none;
-border-radius:10px;
-color:#fff;
-font-size:16px;
-margin-top:8px;
-}
-
+.bigBtn{width:100%;padding:12px;border:none;border-radius:8px;color:#fff;margin-top:6px}
 .start{background:#16a34a}
 .collect{background:#2563eb}
 .complete{background:#f97316}
-
 </style>
 </head>
 
 <body>
 
-<div class="panel" id="info"></div>
-
+<div class="panel" id="panel">Loading…</div>
 <div id="map"></div>
 
 <script>
@@ -55,15 +33,22 @@ const CSV="https://docs.google.com/spreadsheets/d/e/2PACX-1vQ3bMMFf71-vdGNiWFnf7
 
 const SPEED=50;
 
-let map=L.map('map').setView([20.9,83.4],12);
+const tourPlan={
+MONDAY:["JURIA"],
+TUESDAY:["GHESS"],
+WEDNESDAY:["GAISILATE"],
+THURSDAY:["JHARBANDH"],
+FRIDAY:["PADAMPUR"],
+SATURDAY:["PAIKMAL","MANDOSIL"]
+};
 
+let map=L.map('map').setView([20.9,83.4],11);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
-let userMarker,routeLine,visitedLine;
-
-let parties=[],pending=[],visited=[];
-
-let userLat,userLng,currentTarget;
+let userLat,userLng;
+let data=[],today=[];
+let pending=[],currentTarget;
+let userMarker,routeLine;
 
 const num=v=>Number(String(v||"").replace(/[^0-9.-]/g,""))||0;
 
@@ -78,38 +63,24 @@ Math.sin(dLon/2)**2;
 return R*(2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x)));
 }
 
-navigator.geolocation.watchPosition(pos=>{
-
-userLat=pos.coords.latitude;
-userLng=pos.coords.longitude;
-
-if(userMarker) map.removeLayer(userMarker);
-
-userMarker=L.marker([userLat,userLng]).addTo(map);
-
-map.setView([userLat,userLng]);
-
-updateNavigation();
-
-});
-
-function load(){
+function loadCSV(){
 
 Papa.parse(CSV,{
 download:true,header:true,
 complete:res=>{
 
-parties=res.data.map(r=>({
-name:r.PARTY,
+data=res.data.map(r=>({
+
+party:r.PARTY,
+area:(r.AREA||"").toUpperCase(),
 lat:num(r.LAT),
 lng:num(r.LNG),
 balance:num(r.BALANCE),
 credit:num(r["AVG CREDIT CYCLE"])
+
 }));
 
-pending=[...parties];
-
-drawRoute();
+initGPS();
 
 }
 
@@ -117,9 +88,59 @@ drawRoute();
 
 }
 
+function initGPS(){
+
+navigator.geolocation.getCurrentPosition(pos=>{
+
+userLat=pos.coords.latitude;
+userLng=pos.coords.longitude;
+
+map.setView([userLat,userLng],12);
+
+renderDay();
+
+});
+
+}
+
+function renderDay(){
+
+let todayName=new Date().toLocaleDateString("en-US",{weekday:"long"}).toUpperCase();
+
+let areas=tourPlan[todayName];
+
+today=data.filter(d=>areas.some(a=>d.area.includes(a)));
+
+pending=[...today];
+
+panel.innerHTML=`
+<b>${todayName}</b><br>
+Parties: ${today.length}
+<button class="bigBtn start" onclick="startTour()">START TOUR</button>
+`;
+
+plotPins();
+
+}
+
+function plotPins(){
+
+today.forEach(p=>{
+L.circleMarker([p.lat,p.lng],{radius:6,color:"green"}).addTo(map);
+});
+
+}
+
+function startTour(){
+
+drawRoute();
+updateNext();
+
+}
+
 function drawRoute(){
 
-let route=[ [userLat,userLng] ];
+let route=[[userLat,userLng]];
 
 let tempLat=userLat,tempLng=userLng;
 
@@ -144,9 +165,7 @@ routeLine=L.polyline(route,{color:"blue"}).addTo(map);
 
 }
 
-function updateNavigation(){
-
-if(!pending.length) return;
+function updateNext(){
 
 pending.forEach(p=>p.dist=getDistance(userLat,userLng,p.lat,p.lng));
 
@@ -158,26 +177,19 @@ let remainingKm=pending.reduce((a,b)=>a+b.dist,0);
 
 let eta=remainingKm/SPEED;
 
-info.innerHTML=`
-
-<b>Next:</b> ${currentTarget.name}<br>
+panel.innerHTML=`
+<b>Next:</b> ${currentTarget.party}<br>
 ₹${currentTarget.balance} | ${currentTarget.credit} days<br>
 📍 ${currentTarget.dist.toFixed(2)} km<br>
-⏱ ETA ${(eta).toFixed(2)} hr
-
+⏱ ETA ${eta.toFixed(2)} hr
 <button class="bigBtn start" onclick="startVisit()">START VISIT</button>
-
 `;
-
-if(currentTarget.dist<0.05){
-alert("Reached "+currentTarget.name);
-}
 
 }
 
 function startVisit(){
 
-info.innerHTML+=`
+panel.innerHTML+=`
 <button class="bigBtn collect" onclick="collect()">COLLECT</button>
 `;
 
@@ -185,17 +197,13 @@ info.innerHTML+=`
 
 function collect(){
 
-let amt=prompt("Enter collection");
-
-visited.push(currentTarget);
-
 pending=pending.filter(p=>p!==currentTarget);
 
-drawRoute();
+updateNext();
 
 }
 
-load();
+loadCSV();
 
 </script>
 </body>
