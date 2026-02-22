@@ -11,14 +11,11 @@
 body{margin:0;font-family:Arial;background:#f1f5f9}
 .panel{padding:12px;background:#fff;box-shadow:0 2px 6px rgba(0,0,0,.15)}
 #map{height:58vh}
-
 select,button{
-width:100%;padding:14px;margin-top:8px;border:none;
-border-radius:10px;font-size:15px;font-weight:bold
-}
-
+width:100%;padding:14px;margin-top:8px;border:none;border-radius:10px;
+font-size:15px;font-weight:bold}
 .mainBtn{background:#16a34a;color:#fff}
-.kpi{font-size:13px;line-height:1.4}
+.kpi{font-size:13px}
 hr{margin:8px 0}
 </style>
 </head>
@@ -135,23 +132,16 @@ let creditList=[...today]
 
 return `
 <div class="kpi">
-
 <b>FY KPI</b><br>
 ₹${fyBusiness.toFixed(0)} → ₹${fyCollection.toFixed(0)}
-
 <div style="background:#ddd;height:6px;border-radius:4px;margin:4px 0">
 <div style="width:${percent}%;height:6px;background:${progressColor(percent)}"></div>
 </div>
-
 <hr>
-
 <b>Mission</b><br>
 Collect ₹${target.toFixed(0)} → Unlock ₹${unlock.toFixed(0)}
-
 <hr>
-
 <b>Credit >45</b><br>${creditList}
-
 </div>
 `;
 }
@@ -199,6 +189,28 @@ journeyStart=new Date();
 updateNext();
 }
 
+function drawRoute(){
+
+if(routeLine) map.removeLayer(routeLine);
+if(!pending.length) return;
+
+let lat=userLat,lng=userLng;
+let temp=[...pending];
+let coords=[[lat,lng]];
+
+while(temp.length){
+temp.forEach(p=>p.d=getDistance(lat,lng,p.lat,p.lng));
+temp.sort((a,b)=>a.d-b.d);
+let n=temp.shift();
+coords.push([n.lat,n.lng]);
+lat=n.lat;lng=n.lng;
+}
+
+routeLine=L.polyline(coords,{color:"blue",weight:4}).addTo(map);
+map.fitBounds(routeLine.getBounds(),{padding:[40,40]});
+
+}
+
 function updateNext(){
 
 if(!pending.length){returnToStart();return;}
@@ -210,12 +222,10 @@ currentParty=pending[0];
 
 drawRoute();
 
-let eta=pending.reduce((a,b)=>a+b.dist,0)/SPEED;
-
 setPanel(`
 <b>${currentParty.party}</b><br>
 ₹${currentParty.balance} | ${currentParty.credit} days<br>
-📍 ${currentParty.dist.toFixed(2)} km | ⏱ ${eta.toFixed(2)} hr
+📍 ${currentParty.dist.toFixed(2)} km
 <button class="mainBtn" onclick="workflow()">${getBtnText()}</button>
 `);
 
@@ -229,15 +239,9 @@ if(stage==="collect") return "COMPLETE VISIT";
 
 function workflow(){
 
-if(stage==="idle"){
-visitStart=new Date();
-stage="start";updateNext();return;
-}
+if(stage==="idle"){visitStart=new Date();stage="start";updateNext();return;}
 
-if(stage==="start"){
-currentParty.amount=num(prompt("Enter collection"));
-stage="collect";updateNext();return;
-}
+if(stage==="start"){currentParty.amount=num(prompt("Enter collection"));stage="collect";updateNext();return;}
 
 if(stage==="collect"){
 
@@ -251,40 +255,25 @@ userLat=currentParty.lat;
 userLng=currentParty.lng;
 
 stage="idle";
+
 updateNext();
 }
 }
 
-function drawRoute(){
+function returnToStart(){
 
 if(routeLine) map.removeLayer(routeLine);
 
-let route=[[userLat,userLng]];
-let lat=userLat,lng=userLng;
-let temp=[...pending];
+routeLine=L.polyline([[userLat,userLng],[startLat,startLng]],{
+color:"red",weight:4,dashArray:"6,6"
+}).addTo(map);
 
-while(temp.length){
-temp.forEach(p=>p.d=getDistance(lat,lng,p.lat,p.lng));
-temp.sort((a,b)=>a.d-b.d);
-let n=temp.shift();
-route.push([n.lat,n.lng]);
-lat=n.lat;lng=n.lng;
-}
-
-routeLine=L.polyline(route,{color:"blue"}).addTo(map);
-}
-
-function returnToStart(){
-
-routeLine=L.polyline([[userLat,userLng],[startLat,startLng]],{color:"red"}).addTo(map);
+map.fitBounds(routeLine.getBounds(),{padding:[40,40]});
 
 setPanel(`<button class="mainBtn" onclick="saveExpense()">ENTER TOUR EXPENSE</button>`);
 }
 
-function saveExpense(){
-expense=num(prompt("Expense"));
-endTour();
-}
+function saveExpense(){expense=num(prompt("Expense"));endTour();}
 
 function endTour(){
 
@@ -292,22 +281,16 @@ let totalCollection=visited.reduce((a,b)=>a+(b.amount||0),0);
 let totalDistance=visited.reduce((a,b)=>a+b.distance,0);
 let totalTime=(new Date()-journeyStart)/3600000;
 
-let report=visited.map((v,i)=>`
-${i+1}. ${v.party}
-📍 ${v.distance.toFixed(2)} km
-⏱ ${(v.time/60).toFixed(1)} min
-💰 ₹${v.amount}`).join("\n\n");
-
 let summary=`
-Total Distance: ${totalDistance.toFixed(2)} km
+Distance: ${totalDistance.toFixed(2)} km
 Collection: ₹${totalCollection}
 Expense: ₹${expense}
 Net: ₹${totalCollection-expense}
 Recovery/km: ₹${(totalCollection/totalDistance||0).toFixed(0)}
 `;
 
-setPanel(`<pre>${report}\n\n${summary}</pre>
-<button onclick="window.open('https://wa.me/?text='+encodeURIComponent(report+summary))">📄 SHARE WHATSAPP</button>`);
+setPanel(`<pre>${summary}</pre>
+<button onclick="window.open('https://wa.me/?text='+encodeURIComponent(summary))">📄 SHARE WHATSAPP</button>`);
 }
 
 loadCSV();
