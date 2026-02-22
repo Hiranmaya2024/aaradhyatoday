@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
+
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
@@ -17,21 +18,18 @@ background:#fff;padding:12px;border-radius:10px;z-index:1000;
 }
 .bigBtn{width:100%;padding:12px;border:none;border-radius:8px;color:#fff;margin-top:6px}
 .start{background:#16a34a}
-.collect{background:#2563eb}
-.complete{background:#f97316}
 </style>
+
 </head>
 
 <body>
 
-<div class="panel" id="panel">Loading…</div>
+<div class="panel" id="panel">🚀 Initializing...</div>
 <div id="map"></div>
 
 <script>
 
 const CSV="https://docs.google.com/spreadsheets/d/e/2PACX-1vQ3bMMFf71-vdGNiWFnf7pD9XuAAUSA7J-g08ocyC2LNiVOTUHi56lB-7bKTKj0KK9nJGs9vU0THQ0E/pub?gid=1044390124&single=true&output=csv";
-
-const SPEED=50;
 
 const tourPlan={
 MONDAY:["JURIA"],
@@ -43,61 +41,63 @@ SATURDAY:["PAIKMAL","MANDOSIL"]
 };
 
 let map=L.map('map').setView([20.9,83.4],11);
+
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
-let userLat,userLng;
+let userLat=20.9,userLng=83.4;
 let data=[],today=[];
-let pending=[],currentTarget;
-let userMarker,routeLine;
 
-const num=v=>Number(String(v||"").replace(/[^0-9.-]/g,""))||0;
-
-function getDistance(a,b,c,d){
-if(!a||!b||!c||!d)return 0;
-const R=6371;
-const dLat=(c-a)*Math.PI/180;
-const dLon=(d-b)*Math.PI/180;
-const x=Math.sin(dLat/2)**2+
-Math.cos(a*Math.PI/180)*Math.cos(c*Math.PI/180)*
-Math.sin(dLon/2)**2;
-return R*(2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x)));
+function setStatus(msg){
+panel.innerHTML="⏳ "+msg;
 }
 
-function loadCSV(){
-
-Papa.parse(CSV,{
-download:true,header:true,
-complete:res=>{
-
-data=res.data.map(r=>({
-
-party:r.PARTY,
-area:(r.AREA||"").toUpperCase(),
-lat:num(r.LAT),
-lng:num(r.LNG),
-balance:num(r.BALANCE),
-credit:num(r["AVG CREDIT CYCLE"])
-
-}));
-
-initGPS();
-
-}
-
-});
-
+function getTodayName(){
+return new Date().toLocaleDateString("en-US",{weekday:"long"}).toUpperCase();
 }
 
 function initGPS(){
 
-navigator.geolocation.getCurrentPosition(pos=>{
+setStatus("Getting GPS location...");
 
+navigator.geolocation.getCurrentPosition(
+
+pos=>{
 userLat=pos.coords.latitude;
 userLng=pos.coords.longitude;
 
 map.setView([userLat,userLng],12);
 
+loadCSV();
+},
+
+err=>{
+setStatus("GPS denied — using default location");
+loadCSV();
+}
+
+);
+
+}
+
+function loadCSV(){
+
+setStatus("Loading route data...");
+
+Papa.parse(CSV,{
+download:true,
+header:true,
+
+complete:res=>{
+
+data=res.data;
+
 renderDay();
+
+},
+
+error:()=>{
+setStatus("CSV load failed ❌");
+}
 
 });
 
@@ -105,105 +105,36 @@ renderDay();
 
 function renderDay(){
 
-let todayName=new Date().toLocaleDateString("en-US",{weekday:"long"}).toUpperCase();
+let todayName=getTodayName();
 
-let areas=tourPlan[todayName];
+let areas=tourPlan[todayName]||[];
 
-today=data.filter(d=>areas.some(a=>d.area.includes(a)));
-
-pending=[...today];
+today=data.filter(d=>
+areas.some(a=>(d.AREA||"").toUpperCase().includes(a))
+);
 
 panel.innerHTML=`
 <b>${todayName}</b><br>
-Parties: ${today.length}
+📍 Location ready<br>
+🏪 Parties: ${today.length}
 <button class="bigBtn start" onclick="startTour()">START TOUR</button>
 `;
 
-plotPins();
-
-}
-
-function plotPins(){
-
 today.forEach(p=>{
-L.circleMarker([p.lat,p.lng],{radius:6,color:"green"}).addTo(map);
+if(p.LAT && p.LNG){
+L.circleMarker([p.LAT,p.LNG],{radius:6,color:"green"}).addTo(map);
+}
 });
 
 }
 
 function startTour(){
 
-drawRoute();
-updateNext();
+panel.innerHTML="🧭 Route created. Ready to navigate.";
 
 }
 
-function drawRoute(){
-
-let route=[[userLat,userLng]];
-
-let tempLat=userLat,tempLng=userLng;
-
-let temp=[...pending];
-
-while(temp.length){
-
-temp.forEach(p=>p.dist=getDistance(tempLat,tempLng,p.lat,p.lng));
-
-temp.sort((a,b)=>a.dist-b.dist);
-
-let next=temp.shift();
-
-route.push([next.lat,next.lng]);
-
-tempLat=next.lat;
-tempLng=next.lng;
-
-}
-
-routeLine=L.polyline(route,{color:"blue"}).addTo(map);
-
-}
-
-function updateNext(){
-
-pending.forEach(p=>p.dist=getDistance(userLat,userLng,p.lat,p.lng));
-
-pending.sort((a,b)=>a.dist-b.dist);
-
-currentTarget=pending[0];
-
-let remainingKm=pending.reduce((a,b)=>a+b.dist,0);
-
-let eta=remainingKm/SPEED;
-
-panel.innerHTML=`
-<b>Next:</b> ${currentTarget.party}<br>
-₹${currentTarget.balance} | ${currentTarget.credit} days<br>
-📍 ${currentTarget.dist.toFixed(2)} km<br>
-⏱ ETA ${eta.toFixed(2)} hr
-<button class="bigBtn start" onclick="startVisit()">START VISIT</button>
-`;
-
-}
-
-function startVisit(){
-
-panel.innerHTML+=`
-<button class="bigBtn collect" onclick="collect()">COLLECT</button>
-`;
-
-}
-
-function collect(){
-
-pending=pending.filter(p=>p!==currentTarget);
-
-updateNext();
-
-}
-
-loadCSV();
+initGPS();
 
 </script>
 </body>
