@@ -25,7 +25,6 @@ body{font-family:Arial;margin:0;background:#f1f5f9}
 .disabled{background:#9ca3af}
 iframe{width:100%;height:240px;border:0;border-radius:10px}
 .legend{font-size:13px;margin-top:6px}
-.legend span{margin-right:12px}
 @media(max-width:768px){.main{flex-direction:column;height:auto}.left,.right{width:100%}}
 </style>
 </head>
@@ -109,7 +108,6 @@ render();
 function render(){
 
 let areas=tourPlan[daySelect.value];
-
 today=data.filter(x=>areas.includes(x.area));
 
 renderSummary();
@@ -137,7 +135,6 @@ summary.innerHTML=`
 }
 
 function showParty(name){
-
 let p=data.find(x=>x.party===name);
 
 partyCard.innerHTML=`
@@ -151,7 +148,6 @@ Credit: ${p.credit} days<br><br>
 <a class="btn collect" href="https://wa.me/91${p.phone}">WhatsApp</a>
 <a class="btn stop" href="https://www.google.com/maps?q=${p.lat},${p.lng}" target="_blank">Navigate</a>
 `;
-
 }
 
 function startJourney(){
@@ -170,32 +166,21 @@ nextVisit();
 
 function drawMap(){
 
-let pending = route.filter(p=>!visits.find(v=>v.party===p.party));
-let geoStops = pending.length ? pending : route;
+if(!userLat) return;
 
-let pins = geoStops.map(p=>{
+let geoStops=today.filter(p=>p.lat && p.lng);
 
-let label="A";
+let next = route.length ? route[0] : geoStops[0];
 
-if(visits.find(v=>v.party===p.party)) label="V";
-else if(route.length && route[0].party===p.party) label="N";
-else if(p.status==="BLOCK") label="B";
+let pinList = geoStops.map(p=>`${p.lat},${p.lng}`).join("|");
 
-return `${p.lat},${p.lng}(${label})`;
-
-}).join("|");
-
-let mapQuery = `${userLat},${userLng}|${pins}`;
-
-let previewURL=`https://www.google.com/maps?q=${mapQuery}&z=13&output=embed`;
+let previewURL=
+`https://www.google.com/maps?q=${next.lat},${next.lng}|${pinList}&z=13&output=embed`;
 
 mapBox.innerHTML=`
 <iframe src="${previewURL}"></iframe>
 <div class="legend">
-<span>⭐ N = Next</span>
-<span>🔴 B = Blocked</span>
-<span>🟢 A = Active</span>
-<span>✅ V = Visited</span>
+📍 All Parties | ⭐ Center = Next Visit
 </div>
 `;
 
