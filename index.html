@@ -10,19 +10,16 @@
 <style>
 body{margin:0;font-family:Arial;background:#f1f5f9}
 .panel{padding:12px;background:#fff;box-shadow:0 2px 6px rgba(0,0,0,.15)}
-#map{height:60vh}
+#map{height:58vh}
 
 select,button{
-width:100%;
-padding:14px;
-margin-top:8px;
-border:none;
-border-radius:10px;
-font-size:16px;
-font-weight:bold;
+width:100%;padding:14px;margin-top:8px;border:none;
+border-radius:10px;font-size:15px;font-weight:bold
 }
 
 .mainBtn{background:#16a34a;color:#fff}
+.kpi{font-size:13px;line-height:1.4}
+hr{margin:8px 0}
 </style>
 </head>
 
@@ -52,19 +49,13 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 let userLat=20.9,userLng=83.4,startLat,startLng,userMarker;
 
 let data=[],today=[],pending=[],visited=[];
-let partyMarkers=[],routeLine;
+let routeLine,partyMarkers=[];
+
+let fyBusiness=0,fyCollection=0;
 
 let journeyStart,visitStart,currentParty,expense=0,stage="idle";
 
 const num=v=>Number(String(v||"").replace(/[^0-9.-]/g,""))||0;
-
-function setPanel(html){
-panel.innerHTML=`
-<select onchange="renderDay(this.value)">
-${Object.keys(tourPlan).map(d=>`<option>${d}</option>`)}
-</select>
-${html}`;
-}
 
 function getDistance(a,b,c,d){
 if(!a||!b||!c||!d)return 0;
@@ -80,32 +71,98 @@ return R*(2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x)));
 navigator.geolocation.watchPosition(pos=>{
 userLat=pos.coords.latitude;
 userLng=pos.coords.longitude;
-
 if(userMarker) map.removeLayer(userMarker);
 userMarker=L.marker([userLat,userLng]).addTo(map);
-
 });
 
 async function loadCSV(){
 
-setPanel("⏳ Fetching data…");
+setPanel("⏳ Loading data...");
 
 const res=await fetch(CSV_URL);
 const text=await res.text();
 
 const parsed=Papa.parse(text,{header:true});
 
-data=parsed.data.map(r=>({
+fyBusiness=0;fyCollection=0;
+
+data=parsed.data.map(r=>{
+
+let business=num(r.BUSINESS);
+let balance=num(r.BALANCE);
+
+fyBusiness+=business;
+fyCollection+=(business-balance);
+
+return{
 party:r.PARTY,
 area:(r.AREA||"").toUpperCase(),
 lat:num(r.LAT),
 lng:num(r.LNG),
-balance:num(r.BALANCE),
-credit:num(r["AVG CREDIT CYCLE"])
-})).filter(x=>x.party);
+balance:balance,
+credit:num(r["AVG CREDIT CYCLE"]),
+status:(r["ACCOUNT STATUS"]||"").toUpperCase(),
+reactivation:num(r["PAYMENT NEEDED TO REACTIVATE"]),
+business:business
+};
+
+}).filter(x=>x.party);
 
 renderDay("MONDAY");
 
+}
+
+function progressColor(p){
+if(p<40) return "red";
+if(p<70) return "orange";
+return "green";
+}
+
+function buildKPI(){
+
+let blocked=today.filter(p=>p.status==="BLOCKED");
+
+let unlock=blocked.reduce((a,b)=>a+b.balance,0);
+let target=blocked.reduce((a,b)=>a+b.reactivation,0);
+
+let percent=(fyCollection/fyBusiness*100)||0;
+
+let creditList=[...today]
+.filter(p=>p.credit>45)
+.sort((a,b)=>b.credit-a.credit)
+.slice(0,5)
+.map(p=>`${p.party} (${p.credit})`).join("<br>");
+
+return `
+<div class="kpi">
+
+<b>FY KPI</b><br>
+₹${fyBusiness.toFixed(0)} → ₹${fyCollection.toFixed(0)}
+
+<div style="background:#ddd;height:6px;border-radius:4px;margin:4px 0">
+<div style="width:${percent}%;height:6px;background:${progressColor(percent)}"></div>
+</div>
+
+<hr>
+
+<b>Mission</b><br>
+Collect ₹${target.toFixed(0)} → Unlock ₹${unlock.toFixed(0)}
+
+<hr>
+
+<b>Credit >45</b><br>${creditList}
+
+</div>
+`;
+}
+
+function setPanel(html){
+panel.innerHTML=`
+<select onchange="renderDay(this.value)">
+${Object.keys(tourPlan).map(d=>`<option>${d}</option>`)}
+</select>
+${buildKPI()}
+${html}`;
 }
 
 function drawPins(){
@@ -174,19 +231,16 @@ function workflow(){
 
 if(stage==="idle"){
 visitStart=new Date();
-stage="start";
-updateNext();
-return;
+stage="start";updateNext();return;
 }
 
 if(stage==="start"){
 currentParty.amount=num(prompt("Enter collection"));
-stage="collect";
-updateNext();
-return;
+stage="collect";updateNext();return;
 }
 
 if(stage==="collect"){
+
 let d=getDistance(userLat,userLng,currentParty.lat,currentParty.lng);
 
 visited.push({...currentParty,distance:d,time:(new Date()-visitStart)/1000});
@@ -197,10 +251,8 @@ userLat=currentParty.lat;
 userLng=currentParty.lng;
 
 stage="idle";
-
 updateNext();
 }
-
 }
 
 function drawRoute(){
@@ -220,7 +272,6 @@ lat=n.lat;lng=n.lng;
 }
 
 routeLine=L.polyline(route,{color:"blue"}).addTo(map);
-
 }
 
 function returnToStart(){
@@ -228,7 +279,6 @@ function returnToStart(){
 routeLine=L.polyline([[userLat,userLng],[startLat,startLng]],{color:"red"}).addTo(map);
 
 setPanel(`<button class="mainBtn" onclick="saveExpense()">ENTER TOUR EXPENSE</button>`);
-
 }
 
 function saveExpense(){
@@ -258,7 +308,6 @@ Recovery/km: ₹${(totalCollection/totalDistance||0).toFixed(0)}
 
 setPanel(`<pre>${report}\n\n${summary}</pre>
 <button onclick="window.open('https://wa.me/?text='+encodeURIComponent(report+summary))">📄 SHARE WHATSAPP</button>`);
-
 }
 
 loadCSV();
