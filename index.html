@@ -68,12 +68,28 @@ let map = L.map('map').setView([20.9,83.4],10);
 
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
-let data=[],today=[],route=[],visits=[],markers=[];
+let data=[],today=[],visits=[],markers=[];
 let userLat,userLng,totalStops=0;
 
 let visitState={current:null,startTime:null,amount:0};
 
 const num=v=>Number(String(v||0).replace(/[^0-9.-]/g,""))||0;
+
+function getDistance(lat1, lon1, lat2, lon2){
+
+const R = 6371;
+const dLat = (lat2-lat1) * Math.PI/180;
+const dLon = (lon2-lon1) * Math.PI/180;
+
+const a =
+Math.sin(dLat/2)*Math.sin(dLat/2) +
+Math.cos(lat1*Math.PI/180) *
+Math.cos(lat2*Math.PI/180) *
+Math.sin(dLon/2)*Math.sin(dLon/2);
+
+return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)));
+
+}
 
 function todayName(){
 let d=new Date().toLocaleDateString("en-US",{weekday:"long"});
@@ -99,21 +115,21 @@ init();
 }
 
 function init(){
-render();
+
 navigator.geolocation.getCurrentPosition(pos=>{
 userLat=pos.coords.latitude;
 userLng=pos.coords.longitude;
-L.marker([userLat,userLng]).addTo(map);
+L.circleMarker([userLat,userLng],{radius:8,color:"blue"}).addTo(map);
+render();
 });
+
 }
 
 function render(){
 
 let areas=tourPlan[todayName()];
 today=data.filter(x=>areas.includes(x.area));
-
-route=[...today];
-totalStops=route.length;
+totalStops=today.length;
 
 renderSummary();
 
@@ -146,16 +162,16 @@ function drawMap(){
 markers.forEach(m=>map.removeLayer(m));
 markers=[];
 
-let valid=today.filter(p=>!isNaN(p.lat)&&!isNaN(p.lng));
-
 let bounds=[];
 
-valid.forEach(p=>{
+today.forEach(p=>{
+
+if(isNaN(p.lat)||isNaN(p.lng)) return;
 
 let color="green";
 
 if(visits.find(v=>v.party===p.party)) color="grey";
-else if(route.length && route[0].party===p.party) color="gold";
+else if(visitState.current && visitState.current.party===p.party) color="gold";
 else if(p.status==="BLOCK") color="red";
 
 let marker=L.circleMarker([p.lat,p.lng],{
@@ -175,23 +191,50 @@ if(bounds.length) map.fitBounds(bounds);
 
 function nextVisit(){
 
-if(!route.length){
+let pending = today.filter(p =>
+!visits.find(v=>v.party===p.party) &&
+!isNaN(p.lat) && !isNaN(p.lng)
+);
+
+if(!pending.length){
 aiBox.innerHTML="✅ Route Completed";
 return;
 }
 
-let p=route[0];
+let refLat=userLat;
+let refLng=userLng;
+
+if(visits.length){
+
+let last=data.find(p=>p.party===visits[visits.length-1].party);
+refLat=last.lat;
+refLng=last.lng;
+
+}
+
+pending.forEach(p=>{
+p.distance=getDistance(refLat,refLng,p.lat,p.lng);
+});
+
+pending.sort((a,b)=>
+(a.distance-b.distance) || (b.balance-a.balance)
+);
+
+let p=pending[0];
+
+visitState={current:p,startTime:null,amount:0};
 
 aiBox.innerHTML=`
-<h3>${p.party}</h3>
-₹${p.balance} || ${p.credit} days<br><br>
+<h3>⭐ ${p.party}</h3>
+₹${p.balance} || ${p.credit} days<br>
+📍 ${p.distance.toFixed(2)} km<br><br>
 
 <button class="btn stop" onclick="startVisit()">STOP</button>
 <button class="btn collect disabled" id="collectBtn" onclick="collect()">COLLECT</button>
 <button class="btn go disabled" id="goBtn" onclick="endVisit()">GO</button>
 `;
 
-visitState={current:p,startTime:null,amount:0};
+drawMap();
 
 }
 
@@ -213,10 +256,10 @@ amount:visitState.amount,
 duration:(new Date()-visitState.startTime)/1000
 });
 
-route.shift();
+userLat=visitState.current.lat;
+userLng=visitState.current.lng;
 
 renderSummary();
-drawMap();
 nextVisit();
 
 }
