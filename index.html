@@ -2,7 +2,6 @@
 <html>
 <head>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
 <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
@@ -24,25 +23,18 @@ button,select{width:100%;padding:14px;margin-top:8px;border-radius:10px;border:n
 <script>
 
 const CSV="https://docs.google.com/spreadsheets/d/e/2PACX-1vQ3bMMFf71-vdGNiWFnf7pD9XuAAUSA7J-g08ocyC2LNiVOTUHi56lB-7bKTKj0KK9nJGs9vU0THQ0E/pub?gid=1044390124&single=true&output=csv";
-
 const ARRIVAL_RADIUS=0.05;
-const SPEED=50;
 
 let map=L.map("map").setView([20.9,83.4],11);
 L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(map);
 
-let live=[20.9,83.4];
-let startPoint;
-
+let live=[20.9,83.4],startPoint,routePos;
 let data=[],today=[];
 let visited=new Set();
-let routePos;
 let currentShop=null;
+let visitState="idle";
 
-let journeyStart;
-let totalCollection=0;
-let expense=0;
-
+let totalCollection=0,expense=0;
 let routeLine,userMarker;
 
 const num=v=>Number(String(v||"").replace(/[^0-9.-]/g,""))||0;
@@ -75,42 +67,44 @@ const parsed=Papa.parse(text,{header:true});
 data=parsed.data.map((r,i)=>({
 id:i,
 party:r.PARTY,
-area:(r.AREA||"").toUpperCase(),
 lat:num(r.LAT),
 lng:num(r.LNG),
 balance:num(r.BALANCE),
 business:num(r.BUSINESS),
-credit:num(r["AVG CREDIT CYCLE"]),
-status:(r["ACCOUNT STATUS"]||"").toUpperCase(),
-reactivation:num(r["PAYMENT NEEDED TO REACTIVATE"])
+credit:num(r["AVG CREDIT CYCLE"])
 })).filter(x=>x.party);
 
-renderDay("MONDAY");
+renderDay();
 
 }
 
-function renderDay(day){
+function renderDay(){
 
 today=data;
+
 visited.clear();
 routePos=[...live];
 startPoint=[...live];
-
-panel.innerHTML=`<b>${day}</b>
-<button class="mainBtn" onclick="startTour()">START TOUR</button>`;
+totalCollection=0;
+visitState="idle";
 
 drawPins();
+
+panel.innerHTML=`<button class="mainBtn" onclick="startTour()">START TOUR</button>`;
 
 }
 
 function drawPins(){
 
 today.forEach(p=>{
+
 let color="gray";
+
 if(visited.has(p.id)) color="green";
 if(currentShop && currentShop.id===p.id) color="orange";
 
-L.circleMarker([p.lat,p.lng],{radius:6,color}).addTo(map);
+L.circleMarker([p.lat,p.lng],{radius:6,color,fillColor:color,fillOpacity:1}).addTo(map);
+
 });
 
 }
@@ -147,10 +141,7 @@ map.fitBounds(routeLine.getBounds(),{padding:[40,40]});
 }
 
 function startTour(){
-
-journeyStart=new Date();
 goNext();
-
 }
 
 function goNext(){
@@ -158,7 +149,7 @@ function goNext(){
 let remaining=today.filter(p=>!visited.has(p.id));
 
 if(!remaining.length){
-panel.innerHTML+="<br>Return to start to finish tour";
+panel.innerHTML="<b>Return to start to finish tour</b>";
 return;
 }
 
@@ -169,20 +160,42 @@ currentShop=remaining[0];
 drawRoute();
 
 panel.innerHTML=`
-<b>${currentShop.party}</b>
+<b>${currentShop.party}</b><br>
 ₹${currentShop.balance}
-<button class="mainBtn" onclick="visitFlow()">START VISIT</button>
+<button id="visitBtn" class="mainBtn" onclick="startVisit()">START VISIT</button>
 `;
 
 }
 
-function visitFlow(){
+function startVisit(){
+
+if(visitState!=="idle") return;
+
+visitState="visiting";
+
+document.getElementById("visitBtn").disabled=true;
+
+panel.innerHTML=`
+<b>${currentShop.party}</b>
+<button class="mainBtn" onclick="completeVisit()">COMPLETE VISIT</button>
+`;
+
+}
+
+function completeVisit(){
+
+if(visitState!=="visiting") return;
 
 let amt=prompt("Enter collection");
+
 totalCollection+=num(amt);
 
 visited.add(currentShop.id);
+
 routePos=[currentShop.lat,currentShop.lng];
+
+visitState="idle";
+currentShop=null;
 
 goNext();
 
