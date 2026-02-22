@@ -8,8 +8,6 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
 <style>
 body{font-family:Arial;margin:0;background:#f1f5f9}
@@ -30,7 +28,7 @@ body{font-family:Arial;margin:0;background:#f1f5f9}
 .go{background:#16a34a}
 .disabled{background:#9ca3af}
 
-.progressBar{height:10px;background:#e5e7eb;border-radius:10px;overflow:hidden;margin-top:6px}
+.progressBar{height:10px;background:#e5e7eb;border-radius:10px;margin-top:6px}
 .progressFill{height:100%;background:#16a34a;width:0%}
 
 @media(max-width:768px){
@@ -66,7 +64,7 @@ body{font-family:Arial;margin:0;background:#f1f5f9}
 
 <script>
 
-const CSV="https://docs.google.com/spreadsheets/d/e/2PACX-1vQ3bMMFf71-vdGNiWFnf7pD9XuAAUSA7J-g08ocyC2LNiVOTUHi56lB-7bKTKj0KK9nJGs9vU0THQ0E/pub?gid=1044390124&single=true&output=csv";
+const CSV="YOUR_CSV_LINK_HERE";
 
 const SPEED=50;
 const VISIT_MIN=15;
@@ -84,8 +82,7 @@ let map=L.map('map').setView([20.9,83.4],10);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
 let data=[],today=[],visits=[],markers=[];
-let userLat=20.9,userLng=83.4;
-let totalDistance=0,journeyStartTime=null,totalStops=0;
+let userLat=20.9,userLng=83.4,totalStops=0;
 let visitState={};
 
 const num=v=>Number(String(v||0).replace(/[^0-9.-]/g,""))||0;
@@ -112,39 +109,30 @@ Papa.parse(CSV,{
 download:true,header:true,skipEmptyLines:true,
 complete:res=>{
 data=res.data.map(r=>({
-party:(r["PARTY"]||"").trim(),
-area:(r["AREA"]||"").toUpperCase().trim(),
-status:(r["ACCOUNT STATUS"]||"").trim(),
-balance:num(r["BALANCE"]),
+party:r.PARTY,
+area:r.AREA.toUpperCase(),
+status:r["ACCOUNT STATUS"],
+balance:num(r.BALANCE),
 credit:num(r["AVG CREDIT CYCLE"]),
-reactivate:num(r["Payment needed to Reactivate"]),
-lat:parseFloat(r["LAT"]),
-lng:parseFloat(r["LNG"])
-})).filter(x=>x.party);
+lat:parseFloat(r.LAT),
+lng:parseFloat(r.LNG)
+}));
 render();
 }});
 }
 
-function resetDayState(){
+function render(){
+
 visits=[];
 markers.forEach(m=>map.removeLayer(m));
 markers=[];
-totalDistance=0;
-journeyStartTime=null;
-}
-
-function render(){
-
-resetDayState();
 
 let areas=tourPlan[daySelect.value];
+
 areaInfo.innerHTML="Areas → "+areas.join(", ");
 
 today=data.filter(d=>areas.some(a=>d.area.includes(a)));
 totalStops=today.length;
-
-generateTourPlan();
-renderSummary();
 
 partyList.innerHTML=today.map(p=>`
 <div class="party ${p.status==="BLOCK"?"block":"active"}"
@@ -152,40 +140,7 @@ onclick="showParty('${p.party}')">${p.party}</div>`).join("");
 
 drawMap();
 nextVisit();
-}
-
-function generateTourPlan(){
-
-let valid=today.filter(p=>!isNaN(p.lat));
-if(!valid.length)return;
-
-let temp=[...valid];
-let refLat=userLat,refLng=userLng,totalDist=0;
-
-while(temp.length){
-temp.forEach(p=>p.distance=getDistance(refLat,refLng,p.lat,p.lng));
-temp.sort((a,b)=>a.distance-b.distance);
-let next=temp.shift();
-totalDist+=next.distance;
-refLat=next.lat;
-refLng=next.lng;
-}
-
-let expectedCollection=today.reduce((a,b)=>a+b.reactivate,0);
-let travelTime=totalDist/SPEED;
-let visitTime=(today.length*VISIT_MIN)/60;
-let totalTime=travelTime+visitTime;
-
-planBox.innerHTML=`
-<h3>🧭 Today’s Tour Plan</h3>
-💰 ₹${expectedCollection}<br>
-📍 ${totalDist.toFixed(2)} km<br>
-⏱ ${totalTime.toFixed(2)} hrs
-`;
-}
-
-function renderSummary(){
-summary.innerHTML=`Visits: ${visits.length}/${totalStops}`;
+renderSummary();
 }
 
 function drawMap(){
@@ -193,10 +148,14 @@ function drawMap(){
 let bounds=[];
 
 today.forEach(p=>{
-if(isNaN(p.lat)||isNaN(p.lng))return;
+if(isNaN(p.lat))return;
 
-let marker=L.circleMarker([p.lat,p.lng],{radius:8,color:"green"})
-.addTo(map);
+let color="green";
+if(visits.find(v=>v.party===p.party))color="grey";
+else if(visitState.current?.party===p.party)color="gold";
+else if(p.status==="BLOCK")color="red";
+
+let marker=L.circleMarker([p.lat,p.lng],{radius:8,color:color}).addTo(map);
 
 markers.push(marker);
 bounds.push([p.lat,p.lng]);
@@ -206,11 +165,66 @@ if(bounds.length)map.fitBounds(bounds);
 }
 
 function nextVisit(){
-if(!today.length){
-aiBox.innerHTML="No parties for this day";
+
+let pending=today.filter(p=>!visits.find(v=>v.party===p.party)&&!isNaN(p.lat));
+
+if(!pending.length){
+aiBox.innerHTML="🏁 Route completed";
 return;
 }
-aiBox.innerHTML="Ready to start visits";
+
+pending.forEach(p=>p.distance=getDistance(userLat,userLng,p.lat,p.lng));
+
+pending.sort((a,b)=>a.distance-b.distance);
+
+let p=pending[0];
+
+visitState={current:p,startTime:null};
+
+aiBox.innerHTML=`
+<h3>${p.party}</h3>
+₹${p.balance} | ${p.credit} days<br>
+📍 ${p.distance.toFixed(2)} km<br><br>
+
+<button class="btn stop" onclick="startVisit()">STOP</button>
+<button class="btn collect disabled" id="collectBtn" onclick="collect()">COLLECT</button>
+<button class="btn go disabled" id="goBtn" onclick="endVisit()">GO</button>
+`;
+
+drawMap();
+}
+
+function startVisit(){
+visitState.startTime=new Date();
+collectBtn.classList.remove("disabled");
+}
+
+function collect(){
+visitState.amount=num(prompt("Enter collection"));
+goBtn.classList.remove("disabled");
+}
+
+function endVisit(){
+
+visits.push({party:visitState.current.party,amount:visitState.amount||0});
+
+userLat=visitState.current.lat;
+userLng=visitState.current.lng;
+
+renderSummary();
+nextVisit();
+}
+
+function renderSummary(){
+
+let collected=visits.reduce((a,b)=>a+b.amount,0);
+let progress=totalStops?(visits.length/totalStops)*100:0;
+
+summary.innerHTML=`
+💰 ₹${collected}<br>
+Visits ${visits.length}/${totalStops}
+<div class="progressBar"><div class="progressFill" style="width:${progress}%"></div></div>
+`;
 }
 
 function showParty(name){
