@@ -37,8 +37,8 @@ body{font-family:Arial;margin:0;background:#f1f5f9}
 .left,.right{width:100%}
 }
 </style>
-
 </head>
+
 <body>
 
 <div class="header">
@@ -50,19 +50,15 @@ body{font-family:Arial;margin:0;background:#f1f5f9}
 <div class="main">
 
 <div class="left">
-
 <div class="card" id="planBox"></div>
 <div class="card" id="summary"></div>
 <div id="partyList"></div>
-
 </div>
 
 <div class="right">
-
 <div class="card" id="aiBox"></div>
 <div id="map"></div>
 <div class="card" id="partyCard"></div>
-
 </div>
 
 </div>
@@ -147,17 +143,49 @@ refLng=next.lng;
 }
 
 let expectedCollection=today.reduce((a,b)=>a+b.reactivate,0);
+
 let travelTime=totalDist/SPEED;
 let visitTime=(today.length*VISIT_MIN)/60;
 let totalTime=travelTime+visitTime;
 
+let now=new Date();
+let endDay=new Date();
+endDay.setHours(18,0,0,0);
+
+let availableHours=(endDay-now)/3600000;
+
+let feasibilityHTML="";
+
+if(availableHours>=totalTime){
+
+let finishTime=new Date(now.getTime()+totalTime*3600000);
+
+feasibilityHTML=`
+<h3 style="color:green">🟢 Feasible – Finish by 
+${finishTime.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}
+</h3>`;
+
+}else{
+
+let requiredStart=new Date(endDay.getTime()-totalTime*3600000);
+
+feasibilityHTML=`
+<h3 style="color:red">🔴 Not Feasible</h3>
+Start before 
+<b>${requiredStart.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</b>`;
+}
+
 planBox.innerHTML=`
 <h3>🧭 Today’s Tour Plan</h3>
+
 💰 Expected Collection: <b>₹${expectedCollection}</b><br>
 📍 Distance: <b>${totalDist.toFixed(2)} km</b><br>
 🚗 Travel Time: <b>${travelTime.toFixed(2)} hrs</b><br>
 🕒 Visit Time: <b>${visitTime.toFixed(2)} hrs</b><br>
+
 <h3>⏱ Total Time: ${totalTime.toFixed(2)} hrs</h3>
+
+${feasibilityHTML}
 `;
 
 }
