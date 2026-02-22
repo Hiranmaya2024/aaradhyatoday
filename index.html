@@ -14,27 +14,18 @@
 <style>
 
 body{font-family:Arial;margin:0;background:#f1f5f9}
-
 .header{background:#fff;padding:10px;text-align:center;border-bottom:1px solid #ddd}
-
 .main{display:flex;height:calc(100vh - 110px)}
-
 .left{width:40%;overflow:auto;background:#fff}
-
 .right{width:60%;padding:10px}
-
 .card{background:#fff;padding:12px;border-radius:10px;margin-bottom:10px}
-
 #map{height:260px;border-radius:10px}
 
-.party{padding:10px;border-bottom:1px solid #eee;cursor:pointer}
-
+.party{padding:10px;border-bottom:1px solid #eee}
 .block{border-left:4px solid red}
-
 .active{border-left:4px solid green}
 
 .progressBar{height:10px;background:#e5e7eb;border-radius:10px;margin-top:6px}
-
 .progressFill{height:100%;background:#16a34a;width:0%}
 
 .bigBtn{
@@ -45,6 +36,7 @@ font-weight:bold;
 border:none;
 border-radius:12px;
 color:#fff;
+margin-top:10px;
 }
 
 .stop{background:#f97316}
@@ -113,8 +105,8 @@ let map=L.map('map').setView([20.9,83.4],10);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
 let data=[],today=[],visits=[],markers=[];
-let userLat=20.9,userLng=83.4,totalDistance=0;
-let stage="stop",visitState={},visitStart,visitAmount=0;
+let userLat=20.9,userLng=83.4,totalDistance=0,journeyStartTime=null;
+let stage="stop",visitState={},visitAmount=0;
 
 const num=v=>Number(String(v||0).replace(/[^0-9.-]/g,""))||0;
 
@@ -157,6 +149,8 @@ function render(){
 visits=[];
 markers.forEach(m=>map.removeLayer(m));
 markers=[];
+totalDistance=0;
+journeyStartTime=null;
 
 let areas=tourPlan[daySelect.value];
 areaInfo.innerHTML="Areas → "+areas.join(", ");
@@ -207,6 +201,9 @@ generateFinalReport();
 return;
 }
 
+pending.forEach(p=>p.distance=getDistance(userLat,userLng,p.lat,p.lng));
+pending.sort((a,b)=>a.distance-b.distance);
+
 let p=pending[0];
 
 visitState.current=p;
@@ -225,6 +222,8 @@ aiBox.innerHTML=`
 </div>
 
 `;
+
+drawMap();
 
 }
 
@@ -255,6 +254,16 @@ stage="stop";
 
 function completeVisit(){
 
+if(!journeyStartTime)journeyStartTime=new Date();
+
+if(visits.length>0){
+
+let prev=data.find(p=>p.party===visits[visits.length-1].party);
+
+totalDistance+=getDistance(prev.lat,prev.lng,visitState.current.lat,visitState.current.lng);
+
+}
+
 visits.push({party:visitState.current.party,amount:visitAmount||0});
 
 userLat=visitState.current.lat;
@@ -262,7 +271,7 @@ userLng=visitState.current.lng;
 
 renderSummary();
 nextVisit();
-drawMap();
+
 }
 
 function renderSummary(){
@@ -281,41 +290,46 @@ Visits ${visits.length}/${today.length}
 
 async function generateFinalReport(){
 
-await new Promise(r=>setTimeout(r,800));
+await new Promise(r=>setTimeout(r,1000));
 
 let canvas=await html2canvas(map.getContainer());
-
 let img=canvas.toDataURL("image/png");
 
 let totalCollection=visits.reduce((a,b)=>a+b.amount,0);
-
-let msg=`🏁 Route Completed
-💰 ₹${totalCollection}
-🏪 ${visits.length} visits`;
-
-let wa=`https://wa.me/?text=${encodeURIComponent(msg)}`;
+let totalTime=(new Date()-journeyStartTime)/3600000;
+let recoveryPerKm=totalDistance?(totalCollection/totalDistance).toFixed(0):0;
 
 const { jsPDF } = window.jspdf;
 
-let pdf=new jsPDF();
+let pdf=new jsPDF("p","mm","a4");
 
-pdf.text("Tour Report",20,20);
+pdf.text("AARADHYA SMART TOUR REPORT",20,15);
+pdf.addImage(img,'PNG',10,25,190,100);
 
-pdf.addImage(img,'PNG',15,30,180,80);
+pdf.text(`Distance: ${totalDistance.toFixed(2)} km`,20,140);
+pdf.text(`Collection: ₹${totalCollection}`,20,150);
+pdf.text(`Time: ${totalTime.toFixed(2)} hrs`,20,160);
+pdf.text(`Visits: ${visits.length}`,20,170);
+pdf.text(`Recovery/km: ₹${recoveryPerKm}`,20,180);
 
 window.downloadPDF=()=>pdf.save("Tour_Report.pdf");
 
-function downloadImage(){
+window.downloadMapImage=()=>{
+let link=document.createElement("a");
+link.href=img;
+link.download="Route_Map.png";
+link.click();
+};
 
-let a=document.createElement("a");
+let msg=`🏁 Route Completed
 
-a.href=img;
+📍 Distance: ${totalDistance.toFixed(2)} km
+💰 Collection: ₹${totalCollection}
+⏱ Time: ${totalTime.toFixed(2)} hrs
+🏪 Visits: ${visits.length}
+📊 Recovery/km: ₹${recoveryPerKm}`;
 
-a.download="Route_Map.png";
-
-a.click();
-
-}
+let wa=`https://wa.me/?text=${encodeURIComponent(msg)}`;
 
 aiBox.innerHTML=`
 
@@ -323,13 +337,19 @@ aiBox.innerHTML=`
 
 <img src="${img}" style="width:100%"><br><br>
 
+📍 Distance: <b>${totalDistance.toFixed(2)} km</b><br>
+💰 Collection: <b>₹${totalCollection}</b><br>
+⏱ Time: <b>${totalTime.toFixed(2)} hrs</b><br>
+🏪 Visits: <b>${visits.length}</b><br>
+📊 Recovery/km: <b>₹${recoveryPerKm}</b><br><br>
+
 <a href="${wa}" target="_blank">
 <button class="bigBtn go">📤 Share on WhatsApp</button>
 </a>
 
 <button onclick="downloadPDF()" class="bigBtn collect">📄 Download PDF</button>
 
-<button onclick="downloadImage()" class="bigBtn stop">🖼 Download Map Image</button>
+<button onclick="downloadMapImage()" class="bigBtn stop">🖼 Download Map Image</button>
 
 `;
 
