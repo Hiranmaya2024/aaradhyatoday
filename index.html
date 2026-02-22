@@ -21,7 +21,6 @@ background:linear-gradient(135deg,#0f2027,#2c5364);
 color:#fff
 }
 
-/* Header */
 .header{
 background:#0d6efd;
 color:#fff;
@@ -152,10 +151,15 @@ let customers=[]
 let selected={}
 let userLat="",userLng=""
 
-navigator.geolocation.getCurrentPosition(pos=>{
-userLat=pos.coords.latitude
-userLng=pos.coords.longitude
-})
+/* GPS */
+navigator.geolocation.getCurrentPosition(
+pos=>{
+userLat=Number(pos.coords.latitude)
+userLng=Number(pos.coords.longitude)
+renderList(customers)
+},
+err=>{console.log("GPS denied")}
+)
 
 function startApp(){
 launch.style.display="none"
@@ -201,8 +205,8 @@ reactivate:c[4],
 business:parseFloat(c[5])||0,
 due:parseFloat(c[6])||0,
 phone:c[13],
-lat:c[14],
-lng:c[15],
+lat:parseFloat(c[14]),
+lng:parseFloat(c[15]),
 lastSale:c[17],
 lastCollection:c[18]
 
@@ -216,9 +220,12 @@ renderList(customers)
 
 function getDistance(lat,lng){
 
-if(!userLat||!lat) return ""
+if(!lat || !lng) return "—"
+
+if(!userLat || !userLng) return "Locating..."
 
 const R=6371
+
 const dLat=(lat-userLat)*Math.PI/180
 const dLng=(lng-userLng)*Math.PI/180
 
@@ -228,7 +235,9 @@ Math.cos(userLat*Math.PI/180)*
 Math.cos(lat*Math.PI/180)*
 Math.sin(dLng/2)**2
 
-return (R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a))).toFixed(1)+" km"
+const d=R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a))
+
+return d.toFixed(1)+" km"
 }
 
 function renderList(data){
