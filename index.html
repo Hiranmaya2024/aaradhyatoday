@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AAradhya Customers</title>
+
+<style>
+body{font-family:Arial;margin:0;background:#f2f2f2}
+.screen{display:none;padding:20px}
+.center{display:flex;justify-content:center;align-items:center;height:100vh;text-align:center}
+.card{
+background:#fff;
+padding:15px;
+border-radius:12px;
+margin-top:15px;
+box-shadow:0 4px 10px rgba(0,0,0,0.1)
+}
+button{
+padding:12px;
+border:none;
+border-radius:8px;
+margin:5px;
+font-size:15px;
+color:#fff
+}
+.call{background:#28a745}
+.whatsapp{background:#25D366}
+.nav{background:#007bff}
+input{width:100%;padding:10px;margin:10px 0;border-radius:8px;border:1px solid #ccc}
+.popup{
+position:fixed;
+top:20px;
+left:50%;
+transform:translateX(-50%);
+background:#000;color:#fff;
+padding:10px 15px;
+border-radius:8px;
+display:none
+}
+</style>
+</head>
+
+<body>
+
+<!-- Launch Screen -->
+<div id="launch" class="center" onclick="showList()">
+<h2>Welcome to<br>AAradhya Pharmaceuticals</h2>
+<p>Tap to continue</p>
+</div>
+
+<!-- List Screen -->
+<div id="list" class="screen">
+<h3>Customers</h3>
+<input type="text" id="search" placeholder="Search customer..." onkeyup="filterList()">
+<div id="customerList"></div>
+</div>
+
+<!-- Profile Screen -->
+<div id="profile" class="screen">
+<button onclick="back()">⬅ Back</button>
+<div id="profileCard"></div>
+</div>
+
+<div id="popup" class="popup">Tap on customer name to view Profile</div>
+
+<script>
+
+let data = []
+
+const csvUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQ3bMMFf71-vdGNiWFnf7pD9XuAAUSA7J-g08ocyC2LNiVOTUHi56lB-7bKTKj0KK9nJGs9vU0THQ0E/pub?gid=1044390124&single=true&output=csv"
+
+fetch(csvUrl)
+.then(res=>res.text())
+.then(text=>{
+const rows = text.split("\n").slice(1)
+
+data = rows.map(r=>{
+let c = r.split(",")
+
+return {
+name:c[0],
+area:c[1],
+status:c[2],
+reason:c[3],
+reactivate:c[4],
+business:c[5],
+due:c[6],
+phone:c[13],
+lat:c[14],
+lng:c[15],
+lastSale:c[17],
+lastCollection:c[18]
+}
+})
+
+renderList()
+})
+
+function showList(){
+launch.style.display="none"
+list.style.display="block"
+
+popup.style.display="block"
+setTimeout(()=>popup.style.display="none",2500)
+}
+
+function renderList(){
+customerList.innerHTML=""
+data.forEach((c,i)=>{
+customerList.innerHTML+=`<div onclick="showProfile(${i})" class="card">${c.name}</div>`
+})
+}
+
+function filterList(){
+let val=search.value.toLowerCase()
+customerList.innerHTML=""
+
+data.filter(c=>c.name.toLowerCase().includes(val))
+.forEach((c,i)=>{
+customerList.innerHTML+=`<div onclick="showProfile(${i})" class="card">${c.name}</div>`
+})
+}
+
+function showProfile(i){
+let c = data[i]
+
+list.style.display="none"
+profile.style.display="block"
+
+profileCard.innerHTML=`
+<div class="card">
+<h3>${c.name}</h3>
+<p><b>Phone:</b> ${c.phone}</p>
+<p><b>Area:</b> ${c.area}</p>
+<p><b>Total Business:</b> ₹${c.business}</p>
+<p><b>Total Due:</b> ₹${c.due}</p>
+<p><b>Last Sale:</b> ${c.lastSale}</p>
+<p><b>Last Collection:</b> ${c.lastCollection}</p>
+<p><b>Status:</b> ${c.status}</p>
+<p><b>Reason:</b> ${c.reason}</p>
+<p><b>Reactivate by Paying:</b> ₹${c.reactivate}</p>
+
+<button class="call" onclick="call('${c.phone}')">Call</button>
+<button class="whatsapp" onclick="whatsapp('${c.phone}')">WhatsApp</button>
+<button class="nav" onclick="navigate('${c.lat}','${c.lng}')">Navigate</button>
+</div>
+`
+}
+
+function back(){
+profile.style.display="none"
+list.style.display="block"
+}
+
+function call(phone){
+window.location.href="tel:"+phone
+}
+
+function whatsapp(phone){
+window.open("https://wa.me/91"+phone,"_blank")
+}
+
+function navigate(lat,lng){
+window.open(`https://www.google.com/maps?q=${lat},${lng}`)
+}
+
+</script>
+
+</body>
+</html>
