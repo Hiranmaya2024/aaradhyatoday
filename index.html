@@ -8,6 +8,7 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 
 <style>
 body{font-family:Arial;margin:0;background:#f1f5f9}
@@ -71,24 +72,21 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 let data=[],today=[],visits=[],markers=[];
 let userLat,userLng,totalStops=0;
 
+let totalDistance=0;
+let journeyStartTime=null;
+
 let visitState={current:null,startTime:null,amount:0};
 
 const num=v=>Number(String(v||0).replace(/[^0-9.-]/g,""))||0;
 
 function getDistance(lat1, lon1, lat2, lon2){
-
-const R = 6371;
-const dLat = (lat2-lat1) * Math.PI/180;
-const dLon = (lon2-lon1) * Math.PI/180;
-
-const a =
-Math.sin(dLat/2)*Math.sin(dLat/2) +
-Math.cos(lat1*Math.PI/180) *
-Math.cos(lat2*Math.PI/180) *
-Math.sin(dLon/2)*Math.sin(dLon/2);
-
-return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)));
-
+const R=6371;
+const dLat=(lat2-lat1)*Math.PI/180;
+const dLon=(lon2-lon1)*Math.PI/180;
+const a=Math.sin(dLat/2)**2+
+Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*
+Math.sin(dLon/2)**2;
+return R*(2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a)));
 }
 
 function todayName(){
@@ -115,14 +113,12 @@ init();
 }
 
 function init(){
-
 navigator.geolocation.getCurrentPosition(pos=>{
 userLat=pos.coords.latitude;
 userLng=pos.coords.longitude;
 L.circleMarker([userLat,userLng],{radius:8,color:"blue"}).addTo(map);
 render();
 });
-
 }
 
 function render(){
@@ -193,11 +189,11 @@ function nextVisit(){
 
 let pending = today.filter(p =>
 !visits.find(v=>v.party===p.party) &&
-!isNaN(p.lat) && !isNaN(p.lng)
+!isNaN(p.lat)&&!isNaN(p.lng)
 );
 
 if(!pending.length){
-aiBox.innerHTML="✅ Route Completed";
+generateFinalReport();
 return;
 }
 
@@ -205,20 +201,16 @@ let refLat=userLat;
 let refLng=userLng;
 
 if(visits.length){
-
 let last=data.find(p=>p.party===visits[visits.length-1].party);
 refLat=last.lat;
 refLng=last.lng;
-
 }
 
 pending.forEach(p=>{
 p.distance=getDistance(refLat,refLng,p.lat,p.lng);
 });
 
-pending.sort((a,b)=>
-(a.distance-b.distance) || (b.balance-a.balance)
-);
+pending.sort((a,b)=>(a.distance-b.distance)||(b.balance-a.balance));
 
 let p=pending[0];
 
@@ -239,6 +231,7 @@ drawMap();
 }
 
 function startVisit(){
+if(!journeyStartTime) journeyStartTime=new Date();
 visitState.startTime=new Date();
 collectBtn.classList.remove("disabled");
 }
@@ -250,11 +243,19 @@ goBtn.classList.remove("disabled");
 
 function endVisit(){
 
+let visitEnd=new Date();
+
 visits.push({
 party:visitState.current.party,
 amount:visitState.amount,
-duration:(new Date()-visitState.startTime)/1000
+duration:(visitEnd-visitState.startTime)/1000
 });
+
+if(visits.length>1){
+let prev=data.find(p=>p.party===visits[visits.length-2].party);
+let curr=visitState.current;
+totalDistance+=getDistance(prev.lat,prev.lng,curr.lat,curr.lng);
+}
 
 userLat=visitState.current.lat;
 userLng=visitState.current.lng;
@@ -264,16 +265,32 @@ nextVisit();
 
 }
 
-function showParty(name){
+function generateFinalReport(){
 
-let p=data.find(x=>x.party===name);
+let totalCollection=visits.reduce((a,b)=>a+b.amount,0);
+let totalTime=(new Date()-journeyStartTime)/1000;
 
-partyCard.innerHTML=`
-<h3>${p.party}</h3>
-Outstanding ₹${p.balance}<br>
-Credit ${p.credit} days
+html2canvas(document.getElementById("map")).then(canvas=>{
+
+let img=canvas.toDataURL();
+
+aiBox.innerHTML=`
+<h2>🏁 Route Completed</h2>
+
+<img src="${img}" style="width:100%;border-radius:10px"><br><br>
+
+📍 Distance: <b>${totalDistance.toFixed(2)} km</b><br>
+💰 Collection: <b>₹${totalCollection}</b><br>
+⏱ Time: <b>${(totalTime/3600).toFixed(2)} hrs</b><br>
+🏪 Visits: <b>${visits.length}</b>
 `;
 
+});
+}
+
+function showParty(name){
+let p=data.find(x=>x.party===name);
+partyCard.innerHTML=`<h3>${p.party}</h3>Outstanding ₹${p.balance}<br>Credit ${p.credit} days`;
 }
 
 load();
