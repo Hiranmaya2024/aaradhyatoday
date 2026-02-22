@@ -9,6 +9,7 @@
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
 <style>
 body{font-family:Arial;margin:0;background:#f1f5f9}
@@ -160,19 +161,15 @@ if(availableHours>=totalTime){
 
 let finishTime=new Date(now.getTime()+totalTime*3600000);
 
-feasibilityHTML=`
-<h3 style="color:green">🟢 Feasible – Finish by 
-${finishTime.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}
-</h3>`;
+feasibilityHTML=`<h3 style="color:green">🟢 Feasible – Finish by 
+${finishTime.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</h3>`;
 
 }else{
 
 let requiredStart=new Date(endDay.getTime()-totalTime*3600000);
 
-feasibilityHTML=`
-<h3 style="color:red">🔴 Not Feasible</h3>
-Start before 
-<b>${requiredStart.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</b>`;
+feasibilityHTML=`<h3 style="color:red">🔴 Not Feasible</h3>
+Start before <b>${requiredStart.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</b>`;
 }
 
 planBox.innerHTML=`
@@ -303,21 +300,58 @@ renderSummary();
 nextVisit();
 }
 
-function generateFinalReport(){
+async function generateFinalReport(){
 
 let totalCollection=visits.reduce((a,b)=>a+b.amount,0);
-let totalTime=(new Date()-journeyStartTime)/1000;
+let totalTime=(new Date()-journeyStartTime)/3600000;
+let recoveryPerKm=totalDistance?(totalCollection/totalDistance).toFixed(0):0;
 
-html2canvas(document.getElementById("map")).then(canvas=>{
+let canvas=await html2canvas(document.getElementById("map"));
+let img=canvas.toDataURL();
+
+let msg=`
+🏁 Route Completed
+
+📍 Distance: ${totalDistance.toFixed(2)} km
+💰 Collection: ₹${totalCollection}
+⏱ Time: ${totalTime.toFixed(2)} hrs
+🏪 Visits: ${visits.length}
+📊 Recovery/km: ₹${recoveryPerKm}
+`;
+
+let waLink=`https://wa.me/?text=${encodeURIComponent(msg)}`;
+
+const { jsPDF } = window.jspdf;
+let pdf=new jsPDF();
+
+pdf.setFontSize(16);
+pdf.text("AARADHYA SMART TOUR REPORT",20,20);
+pdf.addImage(img,'PNG',15,30,180,80);
+
+pdf.setFontSize(12);
+pdf.text(`Distance: ${totalDistance.toFixed(2)} km`,20,130);
+pdf.text(`Collection: ₹${totalCollection}`,20,140);
+pdf.text(`Time: ${totalTime.toFixed(2)} hrs`,20,150);
+pdf.text(`Visits: ${visits.length}`,20,160);
+pdf.text(`Recovery per km: ₹${recoveryPerKm}`,20,170);
+
+window.downloadPDF=()=>pdf.save("Aaradhya_Tour_Report.pdf");
+
 aiBox.innerHTML=`
 <h2>🏁 Route Completed</h2>
-<img src="${canvas.toDataURL()}" style="width:100%;border-radius:10px"><br><br>
+
+<img src="${img}" style="width:100%;border-radius:10px"><br><br>
+
 📍 Distance: <b>${totalDistance.toFixed(2)} km</b><br>
 💰 Collection: <b>₹${totalCollection}</b><br>
-⏱ Time: <b>${(totalTime/3600).toFixed(2)} hrs</b><br>
-🏪 Visits: <b>${visits.length}</b>
+⏱ Time: <b>${totalTime.toFixed(2)} hrs</b><br>
+🏪 Visits: <b>${visits.length}</b><br>
+📊 Recovery/km: <b>₹${recoveryPerKm}</b><br><br>
+
+<a href="${waLink}" target="_blank"><button class="btn go">📤 Share on WhatsApp</button></a>
+
+<button class="btn collect" onclick="downloadPDF()">📄 Download PDF</button>
 `;
-});
 }
 
 function showParty(name){
