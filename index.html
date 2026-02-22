@@ -3,7 +3,6 @@
 <head>
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
 <title>AARADHYA SMART TOUR</title>
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
@@ -11,36 +10,24 @@
 <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
 
 <style>
-
 body{font-family:Arial;margin:0;background:#f1f5f9}
-
 .header{background:#fff;padding:10px;text-align:center;font-weight:bold}
-
 .main{display:flex;height:calc(100vh - 60px)}
-
 .left{width:40%;overflow:auto;background:#fff;padding:8px}
 .right{width:60%;padding:10px}
-
 .card{background:#fff;padding:12px;border-radius:10px;margin-bottom:10px}
-
 #map{height:260px;border-radius:10px}
-
 .partyRow{border-bottom:1px solid #eee;padding:6px}
-
 .bigBtn{width:100%;padding:16px;font-size:16px;border:none;border-radius:10px;color:#fff;margin-top:10px}
-
 .start{background:#16a34a}
 .collect{background:#2563eb}
 .complete{background:#f97316}
 .expense{background:#7c3aed}
 .end{background:#dc2626}
-
 .row{display:flex;gap:8px;margin-top:6px}
 .smallBtn{flex:1;padding:8px;border:none;border-radius:8px;color:#fff;font-weight:bold}
-
 .call{background:#0284c7}
 .nav{background:#7c3aed}
-
 </style>
 </head>
 
@@ -58,11 +45,8 @@ SELECT DAY:
 </div>
 
 <div class="right">
-
 <div class="card" id="aiBox"></div>
-
 <div id="map"></div>
-
 </div>
 
 </div>
@@ -70,6 +54,19 @@ SELECT DAY:
 <script>
 
 const CSV="https://docs.google.com/spreadsheets/d/e/2PACX-1vQ3bMMFf71-vdGNiWFnf7pD9XuAAUSA7J-g08ocyC2LNiVOTUHi56lB-7bKTKj0KK9nJGs9vU0THQ0E/pub?gid=1044390124&single=true&output=csv";
+
+const num=v=>Number(String(v||"").replace(/[^0-9.-]/g,""))||0;
+
+function getDistance(a,b,c,d){
+if(!a||!b||!c||!d) return 0;
+const R=6371;
+const dLat=(c-a)*Math.PI/180;
+const dLon=(d-b)*Math.PI/180;
+const x=Math.sin(dLat/2)**2+
+Math.cos(a*Math.PI/180)*Math.cos(c*Math.PI/180)*
+Math.sin(dLon/2)**2;
+return R*(2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x)));
+}
 
 const tourPlan={
 MONDAY:["JURIA"],
@@ -84,20 +81,9 @@ let map=L.map('map').setView([20.9,83.4],11);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
 let data=[],today=[],visits=[],markers=[];
-let userLat,userLng,startLat,startLng;
-let totalDistance=0,journeyStartTime,stage="start",visitStart,visitAmount=0,tourExpense=0;
-
-const num=v=>Number(String(v||0).replace(/[^0-9.-]/g,""))||0;
-
-function getDistance(a,b,c,d){
-const R=6371;
-const dLat=(c-a)*Math.PI/180;
-const dLon=(d-b)*Math.PI/180;
-const x=Math.sin(dLat/2)**2+
-Math.cos(a*Math.PI/180)*Math.cos(c*Math.PI/180)*
-Math.sin(dLon/2)**2;
-return R*(2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x)));
-}
+let userLat=0,userLng=0,startLat,startLng;
+let totalDistance=0,journeyStartTime,visitStart,tourExpense=0;
+let stage="start",visitState={};
 
 navigator.geolocation.getCurrentPosition(pos=>{
 userLat=pos.coords.latitude;
@@ -116,31 +102,16 @@ download:true,header:true,
 complete:res=>{
 data=res.data.map(r=>({
 party:r.PARTY,
-area:r.AREA.toUpperCase(),
+area:(r.AREA||"").toUpperCase(),
 balance:num(r.BALANCE),
 credit:num(r["AVG CREDIT CYCLE"]),
 phone:r.PHONE,
-lat:parseFloat(r.LAT),
-lng:parseFloat(r.LNG),
+lat:num(r.LAT),
+lng:num(r.LNG),
 status:r["ACCOUNT STATUS"]
-}));
+})).filter(x=>x.party);
 render();
 }});
-}
-
-function render(){
-
-visits=[];
-totalDistance=0;
-
-let areas=tourPlan[daySelect.value];
-
-today=data.filter(d=>areas.some(a=>d.area.includes(a)));
-
-updateDistances();
-drawPartyList();
-showStart();
-
 }
 
 function updateDistances(){
@@ -154,6 +125,40 @@ partyList.innerHTML="<b>TODAY'S PARTIES</b><br>"+today.map(p=>`
 ${p.party}<br>
 ₹${p.balance} | ${p.credit} days | ${p.distance.toFixed(2)} km
 </div>`).join("");
+}
+
+function render(){
+
+visits=[]; totalDistance=0;
+
+let areas=tourPlan[daySelect.value];
+
+today=data.filter(d=>areas.some(a=>d.area.includes(a)));
+
+updateDistances();
+drawPartyList();
+showStart();
+
+drawMap();
+
+}
+
+function drawMap(){
+
+markers.forEach(m=>map.removeLayer(m));
+markers=[];
+
+today.forEach(p=>{
+
+let color="green";
+if(visits.find(v=>v.party===p.party)) color="grey";
+else if(p.status==="BLOCK") color="red";
+
+let marker=L.circleMarker([p.lat,p.lng],{radius:8,color:color}).addTo(map);
+markers.push(marker);
+
+});
+
 }
 
 function showStart(){
@@ -177,6 +182,8 @@ updateDistances();
 
 let p=pending[0];
 
+visitState=p;
+
 aiBox.innerHTML=`
 <h3>${p.party}</h3>
 ₹${p.balance} | ${p.credit} days | ${p.distance.toFixed(2)} km
@@ -189,14 +196,11 @@ aiBox.innerHTML=`
 <button id="actionBtn" onclick="nextStage()" class="bigBtn start">START VISIT</button>
 `;
 
-visitState=p;
-stage="visit";
-
 }
 
 function nextStage(){
 
-if(stage==="visit"){
+if(stage==="start"){
 visitStart=new Date();
 actionBtn.innerHTML="ENTER COLLECTION";
 actionBtn.className="bigBtn collect";
@@ -205,52 +209,44 @@ return;
 }
 
 if(stage==="collect"){
-visitAmount=num(prompt("Enter collection"));
+visitState.amount=num(prompt("Enter collection"));
 actionBtn.innerHTML="COMPLETE VISIT";
 actionBtn.className="bigBtn complete";
 stage="complete";
 return;
 }
 
-if(stage==="complete"){completeVisit();}
+if(stage==="complete"){completeVisit();stage="start";}
 
 }
 
 function completeVisit(){
 
-let distance=getDistance(userLat,userLng,visitState.lat,visitState.lng);
+let d=getDistance(userLat,userLng,visitState.lat,visitState.lng);
 
-totalDistance+=distance;
+totalDistance+=d;
 
 visits.push({
 party:visitState.party,
-amount:visitAmount,
+amount:visitState.amount,
 time:(new Date()-visitStart)/1000,
-distance:distance
+distance:d
 });
 
 userLat=visitState.lat;
 userLng=visitState.lng;
 
+drawMap();
 nextVisit();
 
 }
 
 function askExpense(){
-
-aiBox.innerHTML=`
-<h3>ENTER TOUR EXPENSE</h3>
-<button class="bigBtn expense" onclick="saveExpense()">SAVE EXPENSE</button>
-`;
-
+aiBox.innerHTML=`<button class="bigBtn expense" onclick="saveExpense()">ENTER TOUR EXPENSE</button>`;
 }
 
 function saveExpense(){
 tourExpense=num(prompt("Enter expense"));
-showEndTour();
-}
-
-function showEndTour(){
 aiBox.innerHTML=`<button class="bigBtn end" onclick="endTour()">END TOUR</button>`;
 }
 
@@ -269,13 +265,14 @@ let totalCollection=visits.reduce((a,b)=>a+b.amount,0);
 let totalTime=(new Date()-journeyStartTime)/3600000;
 
 let log=visits.map((v,i)=>`
-${i+1}. ${v.party}
-📍 ${v.distance.toFixed(2)} km
-⏱ ${(v.time/60).toFixed(1)} min
+${i+1}. ${v.party}<br>
+📍 ${v.distance.toFixed(2)} km |
+⏱ ${(v.time/60).toFixed(1)} min |
 💰 ₹${v.amount}`).join("<br><br>");
 
 aiBox.innerHTML=`
 <h2>FINAL REPORT</h2>
+
 ${log}<br><br>
 
 📍 Total Distance: ${totalDistance.toFixed(2)} km<br>
