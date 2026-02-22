@@ -2,17 +2,16 @@
 <html>
 <head>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
 <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
 
 <style>
-body{margin:0;font-family:Arial;background:#f1f5f9}
+body{margin:0;font-family:Arial}
+#map{height:65vh}
 .panel{padding:12px;background:#fff}
-#map{height:60vh}
-button,select{width:100%;padding:14px;margin-top:8px;border-radius:10px;border:none;font-weight:bold}
-.mainBtn{background:#16a34a;color:#fff}
+button,select{width:100%;padding:12px;margin-top:6px;font-size:15px}
+.mainBtn{background:#16a34a;color:#fff;border:none;border-radius:8px}
 </style>
 </head>
 
@@ -23,7 +22,7 @@ button,select{width:100%;padding:14px;margin-top:8px;border-radius:10px;border:n
 
 <script>
 
-const CSV_URL="https://docs.google.com/spreadsheets/d/e/2PACX-1vQ3bMMFf71-vdGNiWFnf7pD9XuAAUSA7J-g08ocyC2LNiVOTUHi56lB-7bKTKj0KK9nJGs9vU0THQ0E/pub?gid=1044390124&single=true&output=csv";
+const CSV="https://docs.google.com/spreadsheets/d/e/2PACX-1vQ3bMMFf71-vdGNiWFnf7pD9XuAAUSA7J-g08ocyC2LNiVOTUHi56lB-7bKTKj0KK9nJGs9vU0THQ0E/pub?gid=1044390124&single=true&output=csv";
 
 const tourPlan={
 MONDAY:["JURIA"],
@@ -34,30 +33,42 @@ FRIDAY:["PADAMPUR"],
 SATURDAY:["PAIKMAL","MANDOSIL"]
 };
 
-let map=L.map('map').setView([20.9,83.4],11);
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+let map=L.map("map").setView([20.9,83.4],11);
+L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(map);
 
-let liveLat=20.9, liveLng=83.4;
-let routeStartLat, routeStartLng;
+let livePos=[20.9,83.4];
+let routePos=[20.9,83.4];
 
-let data=[], today=[];
-let visitedIds=new Set();
+let data=[];
+let today=[];
+
+let visited=new Set();
 let currentId=null;
 
-let routeLine, userMarker, partyMarkers=[];
-
-const num=v=>Number(String(v||"").replace(/[^0-9.-]/g,""))||0;
+let userMarker,routeLine;
+let pins=[];
 
 navigator.geolocation.watchPosition(pos=>{
-liveLat=pos.coords.latitude;
-liveLng=pos.coords.longitude;
-
+livePos=[pos.coords.latitude,pos.coords.longitude];
 if(userMarker) map.removeLayer(userMarker);
-userMarker=L.circleMarker([liveLat,liveLng],{radius:8,color:"blue",fillColor:"blue",fillOpacity:1}).addTo(map);
+userMarker=L.circleMarker(livePos,{radius:8,color:"blue",fillColor:"blue",fillOpacity:1}).addTo(map);
 });
 
-async function loadCSV(){
-const res=await fetch(CSV_URL);
+function dist(a,b){
+const R=6371;
+let dLat=(b[0]-a[0])*Math.PI/180;
+let dLon=(b[1]-a[1])*Math.PI/180;
+let x=Math.sin(dLat/2)**2+
+Math.cos(a[0]*Math.PI/180)*Math.cos(b[0]*Math.PI/180)*
+Math.sin(dLon/2)**2;
+return R*(2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x)));
+}
+
+async function load(){
+
+panel.innerHTML="Loading data...";
+
+const res=await fetch(CSV);
 const text=await res.text();
 const parsed=Papa.parse(text,{header:true});
 
@@ -65,75 +76,74 @@ data=parsed.data.map((r,i)=>({
 id:i,
 party:r.PARTY,
 area:(r.AREA||"").toUpperCase(),
-lat:num(r.LAT),
-lng:num(r.LNG)
+lat:parseFloat(r.LAT),
+lng:parseFloat(r.LNG)
 })).filter(x=>x.party);
 
 renderDay("MONDAY");
-}
 
-function setPanel(html){
-panel.innerHTML=`<select onchange="renderDay(this.value)">
-${Object.keys(tourPlan).map(d=>`<option>${d}</option>`)}
-</select>`+html;
 }
 
 function renderDay(day){
+
 today=data.filter(d=>tourPlan[day].some(a=>d.area.includes(a)));
-visitedIds.clear();
+
+visited.clear();
 currentId=null;
-drawPins();
-setPanel(`<b>${day}</b><br>🏪 ${today.length}
-<button class="mainBtn" onclick="startTour()">START TOUR</button>`);
+
+routePos=[...livePos];
+
+draw();
+
+panel.innerHTML=`
+<select onchange="renderDay(this.value)">
+${Object.keys(tourPlan).map(d=>`<option>${d}</option>`)}
+</select>
+<b>${day}</b><br>🏪 ${today.length}
+<button class="mainBtn" onclick="start()">START TOUR</button>
+`;
+
 }
 
-function drawPins(){
+function draw(){
 
-partyMarkers.forEach(m=>map.removeLayer(m));
-partyMarkers=[];
+pins.forEach(p=>map.removeLayer(p));
+pins=[];
 
 today.forEach(p=>{
 let color="gray";
-if(visitedIds.has(p.id)) color="green";
+if(visited.has(p.id)) color="green";
 if(currentId===p.id) color="orange";
 
-partyMarkers.push(
-L.circleMarker([p.lat,p.lng],{
-radius:7,color:color,fillColor:color,fillOpacity:1
-}).addTo(map)
+pins.push(
+L.circleMarker([p.lat,p.lng],{radius:7,color:color,fillColor:color,fillOpacity:1}).addTo(map)
 );
 });
-}
 
-function distance(a,b,c,d){
-const R=6371;
-const dLat=(c-a)*Math.PI/180;
-const dLon=(d-b)*Math.PI/180;
-const x=Math.sin(dLat/2)**2+
-Math.cos(a*Math.PI/180)*Math.cos(c*Math.PI/180)*
-Math.sin(dLon/2)**2;
-return R*(2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x)));
 }
 
 function buildRoute(){
 
-let pending=today.filter(p=>!visitedIds.has(p.id));
+let remaining=today.filter(p=>!visited.has(p.id));
+let temp=[...remaining];
 
-let lat=liveLat, lng=liveLng;
-let coords=[[lat,lng]];
-
-let temp=[...pending];
+let pos=[...routePos];
+let coords=[pos];
 
 while(temp.length){
-temp.forEach(p=>p.d=distance(lat,lng,p.lat,p.lng));
-temp.sort((a,b)=>a.d-b.d);
+
+temp.sort((a,b)=>
+dist(pos,[a.lat,a.lng]) - dist(pos,[b.lat,b.lng])
+);
+
 let next=temp.shift();
 coords.push([next.lat,next.lng]);
-lat=next.lat;
-lng=next.lng;
+pos=[next.lat,next.lng];
+
 }
 
 return coords;
+
 }
 
 function drawRoute(){
@@ -143,58 +153,70 @@ if(routeLine) map.removeLayer(routeLine);
 let coords=buildRoute();
 
 routeLine=L.polyline(coords,{color:"blue",weight:4}).addTo(map);
+
 map.fitBounds(routeLine.getBounds(),{padding:[40,40]});
+
 }
 
-function startTour(){
-routeStartLat=liveLat;
-routeStartLng=liveLng;
+function start(){
 goNext();
 }
 
 function goNext(){
 
-let pending=today.filter(p=>!visitedIds.has(p.id));
+let remaining=today.filter(p=>!visited.has(p.id));
 
-if(!pending.length){
-returnToStart();
+if(!remaining.length){
+finish();
 return;
 }
 
-pending.forEach(p=>p.d=distance(liveLat,liveLng,p.lat,p.lng));
-pending.sort((a,b)=>a.d-b.d);
+remaining.sort((a,b)=>
+dist(routePos,[a.lat,a.lng]) - dist(routePos,[b.lat,b.lng])
+);
 
-currentId=pending[0].id;
+let next=remaining[0];
 
-drawPins();
+currentId=next.id;
+
+draw();
 drawRoute();
 
-setPanel(`<b>${pending[0].party}</b>
-<br>📍 ${pending[0].d.toFixed(2)} km
-<button class="mainBtn" onclick="completeVisit()">COMPLETE VISIT</button>`);
+panel.innerHTML+=`
+<br><b>${next.party}</b>
+<button class="mainBtn" onclick="visit()">VISIT DONE</button>
+`;
+
 }
 
-function completeVisit(){
-visitedIds.add(currentId);
+function visit(){
+
+let shop=today.find(p=>p.id===currentId);
+
+visited.add(currentId);
+routePos=[shop.lat,shop.lng];
+
 currentId=null;
+
 goNext();
+
 }
 
-function returnToStart(){
+function finish(){
 
 if(routeLine) map.removeLayer(routeLine);
 
-routeLine=L.polyline([
-[liveLat,liveLng],
-[routeStartLat,routeStartLng]
-],{color:"red",dashArray:"6,6",weight:4}).addTo(map);
+routeLine=L.polyline([routePos,livePos],{
+color:"red",dashArray:"6,6",weight:4
+}).addTo(map);
 
 map.fitBounds(routeLine.getBounds(),{padding:[40,40]});
 
-setPanel("<b>Route Completed</b>");
+panel.innerHTML+="<br><b>Route Completed</b>";
+
 }
 
-loadCSV();
+load();
 
 </script>
 </body>
