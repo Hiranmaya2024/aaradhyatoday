@@ -8,11 +8,11 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 
 <style>
 body{font-family:Arial;margin:0;background:#f1f5f9}
-.main{display:flex;height:100vh}
+.header{background:#fff;padding:10px;text-align:center;border-bottom:1px solid #ddd}
+.main{display:flex;height:calc(100vh - 60px)}
 .left{width:40%;overflow:auto;background:#fff}
 .right{width:60%;padding:10px}
 .card{background:#fff;padding:12px;border-radius:10px;margin-bottom:10px}
@@ -20,12 +20,20 @@ body{font-family:Arial;margin:0;background:#f1f5f9}
 .party{padding:10px;border-bottom:1px solid #eee;cursor:pointer}
 .block{border-left:4px solid red}
 .active{border-left:4px solid green}
-.progressBar{height:10px;background:#e5e7eb;border-radius:10px;overflow:hidden;margin-top:6px}
-.progressFill{height:100%;background:#16a34a;width:0%}
+select{padding:6px;border-radius:6px}
 </style>
 
 </head>
 <body>
+
+<div class="header">
+
+<b>Select Day:</b>
+<select id="daySelect"></select>
+
+<div id="areaInfo"></div>
+
+</div>
 
 <div class="main">
 
@@ -35,7 +43,6 @@ body{font-family:Arial;margin:0;background:#f1f5f9}
 </div>
 
 <div class="right">
-<div class="card" id="aiBox">Loading data...</div>
 <div id="map"></div>
 <div class="card" id="partyCard">Select a party</div>
 </div>
@@ -56,15 +63,22 @@ SATURDAY:["PAIKMAL","MANDOSIL"]
 };
 
 let map = L.map('map').setView([20.9,83.4],10);
-
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
-let data=[],today=[],visits=[],markers=[];
+let data=[],today=[],markers=[];
 
 const num=v=>Number(String(v||0).replace(/[^0-9.-]/g,""))||0;
 
-function todayName(){
-return new Date().toLocaleDateString("en-US",{weekday:"long"}).toUpperCase();
+function populateDayDropdown(){
+
+Object.keys(tourPlan).forEach(d=>{
+daySelect.innerHTML+=`<option value="${d}">${d}</option>`;
+});
+
+daySelect.value=new Date().toLocaleDateString("en-US",{weekday:"long"}).toUpperCase();
+
+daySelect.onchange=render;
+
 }
 
 function load(){
@@ -82,12 +96,12 @@ area:(r["AREA"]||"").toUpperCase().trim(),
 status:(r["ACCOUNT STATUS"]||"").trim(),
 balance:num(r["BALANCE"]),
 credit:num(r["AVG CREDIT CYCLE"]),
-reactivate:num(r["Payment needed to Reactivate"]),
 lat:parseFloat(r["LAT"]),
 lng:parseFloat(r["LNG"])
 
 })).filter(x=>x.party);
 
+populateDayDropdown();
 render();
 
 }
@@ -97,14 +111,16 @@ render();
 
 function render(){
 
-let day=todayName();
+let day=daySelect.value;
 
 let areas=tourPlan[day]||[];
+
+areaInfo.innerHTML=`Areas: ${areas.join(", ")}`;
 
 today=data.filter(x=>areas.includes(x.area));
 
 summary.innerHTML=`
-Total Parties: ${today.length}
+Total Parties: <b>${today.length}</b>
 `;
 
 partyList.innerHTML=today.map(p=>`
@@ -114,8 +130,6 @@ ${p.party}<br>₹${p.balance}
 </div>`).join("");
 
 drawMap();
-
-aiBox.innerHTML="Data loaded ✅";
 
 }
 
