@@ -11,14 +11,18 @@
 body{margin:0;font-family:Arial;background:#f1f5f9}
 .panel{padding:12px;background:#fff;box-shadow:0 2px 6px rgba(0,0,0,.15)}
 #map{height:60vh}
+
 select,button{
-width:100%;padding:14px;margin-top:8px;border-radius:10px;border:none;
-font-size:16px;font-weight:bold
+width:100%;
+padding:14px;
+margin-top:8px;
+border:none;
+border-radius:10px;
+font-size:16px;
+font-weight:bold;
 }
-.start{background:#16a34a;color:#fff}
-.collect{background:#2563eb;color:#fff}
-.complete{background:#f97316;color:#fff}
-.expense{background:#7c3aed;color:#fff}
+
+.mainBtn{background:#16a34a;color:#fff}
 </style>
 </head>
 
@@ -45,12 +49,12 @@ SATURDAY:["PAIKMAL","MANDOSIL"]
 let map=L.map('map').setView([20.9,83.4],11);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
-let userLat=20.9,userLng=83.4,userMarker;
+let userLat=20.9,userLng=83.4,startLat,startLng,userMarker;
 
 let data=[],today=[],pending=[],visited=[];
 let partyMarkers=[],routeLine;
 
-let journeyStart,visitStart,currentParty,expense=0;
+let journeyStart,visitStart,currentParty,expense=0,stage="idle";
 
 const num=v=>Number(String(v||"").replace(/[^0-9.-]/g,""))||0;
 
@@ -86,10 +90,10 @@ async function loadCSV(){
 
 setPanel("⏳ Fetching data…");
 
-const response=await fetch(CSV_URL);
-const csvText=await response.text();
+const res=await fetch(CSV_URL);
+const text=await res.text();
 
-const parsed=Papa.parse(csvText,{header:true});
+const parsed=Papa.parse(text,{header:true});
 
 data=parsed.data.map(r=>({
 party:r.PARTY,
@@ -109,16 +113,11 @@ function drawPins(){
 partyMarkers.forEach(m=>map.removeLayer(m));
 partyMarkers=[];
 
-let bounds=[];
-
 today.forEach(p=>{
 if(p.lat&&p.lng){
 partyMarkers.push(L.circleMarker([p.lat,p.lng],{radius:6,color:"green"}).addTo(map));
-bounds.push([p.lat,p.lng]);
 }
 });
-
-if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
 
 }
 
@@ -131,19 +130,21 @@ visited=[];
 
 drawPins();
 
-setPanel(`<b>${day}</b><br>🏪 ${today.length} parties
-<button class="start" onclick="startTour()">START TOUR</button>`);
+setPanel(`<b>${day}</b><br>🏪 ${today.length}
+<button class="mainBtn" onclick="startTour()">START TOUR</button>`);
 
 }
 
 function startTour(){
+startLat=userLat;
+startLng=userLng;
 journeyStart=new Date();
 updateNext();
 }
 
 function updateNext(){
 
-if(!pending.length){askExpense();return;}
+if(!pending.length){returnToStart();return;}
 
 pending.forEach(p=>p.dist=getDistance(userLat,userLng,p.lat,p.lng));
 pending.sort((a,b)=>a.dist-b.dist);
@@ -155,27 +156,37 @@ drawRoute();
 let eta=pending.reduce((a,b)=>a+b.dist,0)/SPEED;
 
 setPanel(`
-<b>Next:</b> ${currentParty.party}<br>
+<b>${currentParty.party}</b><br>
 ₹${currentParty.balance} | ${currentParty.credit} days<br>
-📍 ${currentParty.dist.toFixed(2)} km<br>
-⏱ ETA ${eta.toFixed(2)} hr
-<button class="start" onclick="startVisit()">START VISIT</button>
+📍 ${currentParty.dist.toFixed(2)} km | ⏱ ${eta.toFixed(2)} hr
+<button class="mainBtn" onclick="workflow()">${getBtnText()}</button>
 `);
 
 }
 
-function startVisit(){
+function getBtnText(){
+if(stage==="idle") return "START VISIT";
+if(stage==="start") return "ENTER COLLECTION";
+if(stage==="collect") return "COMPLETE VISIT";
+}
+
+function workflow(){
+
+if(stage==="idle"){
 visitStart=new Date();
-setPanel(panel.innerHTML+`<button class="collect" onclick="enterCollection()">ENTER COLLECTION</button>`);
+stage="start";
+updateNext();
+return;
 }
 
-function enterCollection(){
+if(stage==="start"){
 currentParty.amount=num(prompt("Enter collection"));
-setPanel(panel.innerHTML+`<button class="complete" onclick="completeVisit()">COMPLETE VISIT</button>`);
+stage="collect";
+updateNext();
+return;
 }
 
-function completeVisit(){
-
+if(stage==="collect"){
 let d=getDistance(userLat,userLng,currentParty.lat,currentParty.lng);
 
 visited.push({...currentParty,distance:d,time:(new Date()-visitStart)/1000});
@@ -185,40 +196,16 @@ pending.shift();
 userLat=currentParty.lat;
 userLng=currentParty.lng;
 
+stage="idle";
+
 updateNext();
-
 }
-
-function askExpense(){
-setPanel(`<button class="expense" onclick="saveExpense()">ENTER TOUR EXPENSE</button>`);
-}
-
-function saveExpense(){
-expense=num(prompt("Expense"));
-endTour();
-}
-
-function endTour(){
-
-let totalCollection=visited.reduce((a,b)=>a+(b.amount||0),0);
-let totalDistance=visited.reduce((a,b)=>a+b.distance,0);
-let totalTime=(new Date()-journeyStart)/3600000;
-
-setPanel(`
-<h3>FINAL REPORT</h3>
-📍 ${totalDistance.toFixed(2)} km<br>
-💰 ₹${totalCollection}<br>
-💸 ₹${expense}<br>
-🧾 ₹${totalCollection-expense}<br>
-⏱ ${totalTime.toFixed(2)} hr<br>
-📊 ₹${(totalCollection/totalDistance||0).toFixed(0)}/km
-`);
 
 }
 
 function drawRoute(){
 
-if(routeLine)map.removeLayer(routeLine);
+if(routeLine) map.removeLayer(routeLine);
 
 let route=[[userLat,userLng]];
 let lat=userLat,lng=userLng;
@@ -233,6 +220,44 @@ lat=n.lat;lng=n.lng;
 }
 
 routeLine=L.polyline(route,{color:"blue"}).addTo(map);
+
+}
+
+function returnToStart(){
+
+routeLine=L.polyline([[userLat,userLng],[startLat,startLng]],{color:"red"}).addTo(map);
+
+setPanel(`<button class="mainBtn" onclick="saveExpense()">ENTER TOUR EXPENSE</button>`);
+
+}
+
+function saveExpense(){
+expense=num(prompt("Expense"));
+endTour();
+}
+
+function endTour(){
+
+let totalCollection=visited.reduce((a,b)=>a+(b.amount||0),0);
+let totalDistance=visited.reduce((a,b)=>a+b.distance,0);
+let totalTime=(new Date()-journeyStart)/3600000;
+
+let report=visited.map((v,i)=>`
+${i+1}. ${v.party}
+📍 ${v.distance.toFixed(2)} km
+⏱ ${(v.time/60).toFixed(1)} min
+💰 ₹${v.amount}`).join("\n\n");
+
+let summary=`
+Total Distance: ${totalDistance.toFixed(2)} km
+Collection: ₹${totalCollection}
+Expense: ₹${expense}
+Net: ₹${totalCollection-expense}
+Recovery/km: ₹${(totalCollection/totalDistance||0).toFixed(0)}
+`;
+
+setPanel(`<pre>${report}\n\n${summary}</pre>
+<button onclick="window.open('https://wa.me/?text='+encodeURIComponent(report+summary))">📄 SHARE WHATSAPP</button>`);
 
 }
 
