@@ -3,6 +3,7 @@
 <head>
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
 <title>AARADHYA SMART TOUR</title>
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
@@ -12,24 +13,31 @@
 <style>
 
 body{font-family:Arial;margin:0;background:#f1f5f9}
-.header{background:#fff;padding:10px;text-align:center}
 
-.main{display:flex;height:calc(100vh - 100px)}
-.left{width:40%;overflow:auto;background:#fff}
+.header{background:#fff;padding:10px;text-align:center;font-weight:bold}
+
+.main{display:flex;height:calc(100vh - 60px)}
+
+.left{width:40%;overflow:auto;background:#fff;padding:8px}
 .right{width:60%;padding:10px}
 
 .card{background:#fff;padding:12px;border-radius:10px;margin-bottom:10px}
 
-.bigBtn{width:100%;padding:18px;font-size:18px;border:none;border-radius:12px;color:#fff;margin-top:10px}
+#map{height:260px;border-radius:10px}
+
+.partyRow{border-bottom:1px solid #eee;padding:6px}
+
+.bigBtn{width:100%;padding:16px;font-size:16px;border:none;border-radius:10px;color:#fff;margin-top:10px}
 
 .start{background:#16a34a}
 .collect{background:#2563eb}
-.go{background:#f97316}
+.complete{background:#f97316}
 .expense{background:#7c3aed}
 .end{background:#dc2626}
 
-.row{display:flex;gap:10px;margin-top:8px}
-.smallBtn{flex:1;padding:10px;border:none;border-radius:8px;color:#fff;font-weight:bold}
+.row{display:flex;gap:8px;margin-top:6px}
+.smallBtn{flex:1;padding:8px;border:none;border-radius:8px;color:#fff;font-weight:bold}
+
 .call{background:#0284c7}
 .nav{background:#7c3aed}
 
@@ -39,7 +47,7 @@ body{font-family:Arial;margin:0;background:#f1f5f9}
 <body>
 
 <div class="header">
-<b>Select Day:</b>
+SELECT DAY:
 <select id="daySelect"></select>
 </div>
 
@@ -50,8 +58,11 @@ body{font-family:Arial;margin:0;background:#f1f5f9}
 </div>
 
 <div class="right">
+
 <div class="card" id="aiBox"></div>
-<div id="map" style="height:260px"></div>
+
+<div id="map"></div>
+
 </div>
 
 </div>
@@ -69,12 +80,30 @@ FRIDAY:["PADAMPUR"],
 SATURDAY:["PAIKMAL","MANDOSIL"]
 };
 
-let data=[],today=[],visits=[];
-let userLat=20.9,userLng=83.4,startLat,startLng;
-let totalDistance=0,journeyStartTime;
-let stage="start",visitStart,visitAmount=0,tourExpense=0;
+let map=L.map('map').setView([20.9,83.4],11);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+
+let data=[],today=[],visits=[],markers=[];
+let userLat,userLng,startLat,startLng;
+let totalDistance=0,journeyStartTime,stage="start",visitStart,visitAmount=0,tourExpense=0;
 
 const num=v=>Number(String(v||0).replace(/[^0-9.-]/g,""))||0;
+
+function getDistance(a,b,c,d){
+const R=6371;
+const dLat=(c-a)*Math.PI/180;
+const dLon=(d-b)*Math.PI/180;
+const x=Math.sin(dLat/2)**2+
+Math.cos(a*Math.PI/180)*Math.cos(c*Math.PI/180)*
+Math.sin(dLon/2)**2;
+return R*(2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x)));
+}
+
+navigator.geolocation.getCurrentPosition(pos=>{
+userLat=pos.coords.latitude;
+userLng=pos.coords.longitude;
+map.setView([userLat,userLng],12);
+});
 
 Object.keys(tourPlan).forEach(d=>daySelect.innerHTML+=`<option>${d}</option>`);
 
@@ -88,11 +117,12 @@ complete:res=>{
 data=res.data.map(r=>({
 party:r.PARTY,
 area:r.AREA.toUpperCase(),
-phone:r.PHONE,
 balance:num(r.BALANCE),
 credit:num(r["AVG CREDIT CYCLE"]),
+phone:r.PHONE,
 lat:parseFloat(r.LAT),
-lng:parseFloat(r.LNG)
+lng:parseFloat(r.LNG),
+status:r["ACCOUNT STATUS"]
 }));
 render();
 }});
@@ -107,14 +137,27 @@ let areas=tourPlan[daySelect.value];
 
 today=data.filter(d=>areas.some(a=>d.area.includes(a)));
 
-partyList.innerHTML="<b>Today's Parties</b><br>"+today.map(p=>p.party).join("<br>");
-
+updateDistances();
+drawPartyList();
 showStart();
 
 }
 
+function updateDistances(){
+today.forEach(p=>p.distance=getDistance(userLat,userLng,p.lat,p.lng));
+today.sort((a,b)=>a.distance-b.distance);
+}
+
+function drawPartyList(){
+partyList.innerHTML="<b>TODAY'S PARTIES</b><br>"+today.map(p=>`
+<div class="partyRow">
+${p.party}<br>
+₹${p.balance} | ${p.credit} days | ${p.distance.toFixed(2)} km
+</div>`).join("");
+}
+
 function showStart(){
-aiBox.innerHTML=`<button class="bigBtn start" onclick="startTour()">▶ START TOUR</button>`;
+aiBox.innerHTML=`<button class="bigBtn start" onclick="startTour()">START TOUR</button>`;
 }
 
 function startTour(){
@@ -130,20 +173,20 @@ let pending=today.filter(p=>!visits.find(v=>v.party===p.party));
 
 if(!pending.length){askExpense();return;}
 
+updateDistances();
+
 let p=pending[0];
 
 aiBox.innerHTML=`
-
 <h3>${p.party}</h3>
-₹${p.balance} | ${p.credit} days
+₹${p.balance} | ${p.credit} days | ${p.distance.toFixed(2)} km
 
 <div class="row">
-<button class="smallBtn call" onclick="callParty('${p.phone}')">📞 Call</button>
-<button class="smallBtn nav" onclick="navigateTo(${p.lat},${p.lng})">🧭 Navigate</button>
+<button class="smallBtn call" onclick="callParty('${p.phone}')">CALL</button>
+<button class="smallBtn nav" onclick="navigateTo(${p.lat},${p.lng})">NAVIGATE</button>
 </div>
 
-<button id="actionBtn" onclick="nextStage()" class="bigBtn go">START VISIT</button>
-
+<button id="actionBtn" onclick="nextStage()" class="bigBtn start">START VISIT</button>
 `;
 
 visitState=p;
@@ -164,7 +207,7 @@ return;
 if(stage==="collect"){
 visitAmount=num(prompt("Enter collection"));
 actionBtn.innerHTML="COMPLETE VISIT";
-actionBtn.className="bigBtn start";
+actionBtn.className="bigBtn complete";
 stage="complete";
 return;
 }
@@ -175,7 +218,19 @@ if(stage==="complete"){completeVisit();}
 
 function completeVisit(){
 
-visits.push({party:visitState.party,amount:visitAmount,time:(new Date()-visitStart)/1000});
+let distance=getDistance(userLat,userLng,visitState.lat,visitState.lng);
+
+totalDistance+=distance;
+
+visits.push({
+party:visitState.party,
+amount:visitAmount,
+time:(new Date()-visitStart)/1000,
+distance:distance
+});
+
+userLat=visitState.lat;
+userLng=visitState.lng;
 
 nextVisit();
 
@@ -184,7 +239,7 @@ nextVisit();
 function askExpense(){
 
 aiBox.innerHTML=`
-<h3>Enter Today's Tour Expense</h3>
+<h3>ENTER TOUR EXPENSE</h3>
 <button class="bigBtn expense" onclick="saveExpense()">SAVE EXPENSE</button>
 `;
 
@@ -196,14 +251,13 @@ showEndTour();
 }
 
 function showEndTour(){
-
-aiBox.innerHTML=`
-<button class="bigBtn end" onclick="endTour()">END TOUR</button>
-`;
-
+aiBox.innerHTML=`<button class="bigBtn end" onclick="endTour()">END TOUR</button>`;
 }
 
 function endTour(){
+
+let backDistance=getDistance(userLat,userLng,startLat,startLng);
+totalDistance+=backDistance;
 
 generateFinalReport();
 
@@ -214,15 +268,22 @@ function generateFinalReport(){
 let totalCollection=visits.reduce((a,b)=>a+b.amount,0);
 let totalTime=(new Date()-journeyStartTime)/3600000;
 
+let log=visits.map((v,i)=>`
+${i+1}. ${v.party}
+📍 ${v.distance.toFixed(2)} km
+⏱ ${(v.time/60).toFixed(1)} min
+💰 ₹${v.amount}`).join("<br><br>");
+
 aiBox.innerHTML=`
+<h2>FINAL REPORT</h2>
+${log}<br><br>
 
-<h2>🏁 Tour Completed</h2>
-
+📍 Total Distance: ${totalDistance.toFixed(2)} km<br>
 💰 Collection: ₹${totalCollection}<br>
 💸 Expense: ₹${tourExpense}<br>
 🧾 Net: ₹${totalCollection-tourExpense}<br>
-⏱ ${totalTime.toFixed(2)} hrs
-
+⏱ ${totalTime.toFixed(2)} hrs<br>
+📊 ₹${(totalCollection/totalDistance||0).toFixed(0)}/km
 `;
 
 }
