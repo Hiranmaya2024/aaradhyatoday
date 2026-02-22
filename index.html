@@ -15,8 +15,6 @@ select,button{
 width:100%;padding:14px;margin-top:8px;border:none;border-radius:10px;
 font-size:15px;font-weight:bold}
 .mainBtn{background:#16a34a;color:#fff}
-.kpi{font-size:13px}
-hr{margin:8px 0}
 </style>
 </head>
 
@@ -48,14 +46,11 @@ let userLat=20.9,userLng=83.4,startLat,startLng,userMarker;
 let data=[],today=[],pending=[],visited=[];
 let routeLine,partyMarkers=[];
 
-let fyBusiness=0,fyCollection=0;
-
-let journeyStart,visitStart,currentParty,expense=0,stage="idle";
+let currentParty=null;
 
 const num=v=>Number(String(v||"").replace(/[^0-9.-]/g,""))||0;
 
 function getDistance(a,b,c,d){
-if(!a||!b||!c||!d)return 0;
 const R=6371;
 const dLat=(c-a)*Math.PI/180;
 const dLon=(d-b)*Math.PI/180;
@@ -68,82 +63,33 @@ return R*(2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x)));
 navigator.geolocation.watchPosition(pos=>{
 userLat=pos.coords.latitude;
 userLng=pos.coords.longitude;
+
 if(userMarker) map.removeLayer(userMarker);
-userMarker=L.marker([userLat,userLng]).addTo(map);
+userMarker=L.circleMarker([userLat,userLng],{
+radius:8,color:"blue",fillColor:"blue",fillOpacity:1
+}).addTo(map);
+
 });
 
 async function loadCSV(){
 
-setPanel("⏳ Loading data...");
+setPanel("Loading data...");
 
 const res=await fetch(CSV_URL);
 const text=await res.text();
-
 const parsed=Papa.parse(text,{header:true});
 
-fyBusiness=0;fyCollection=0;
-
-data=parsed.data.map(r=>{
-
-let business=num(r.BUSINESS);
-let balance=num(r.BALANCE);
-
-fyBusiness+=business;
-fyCollection+=(business-balance);
-
-return{
+data=parsed.data.map(r=>({
 party:r.PARTY,
 area:(r.AREA||"").toUpperCase(),
 lat:num(r.LAT),
 lng:num(r.LNG),
-balance:balance,
-credit:num(r["AVG CREDIT CYCLE"]),
-status:(r["ACCOUNT STATUS"]||"").toUpperCase(),
-reactivation:num(r["PAYMENT NEEDED TO REACTIVATE"]),
-business:business
-};
-
-}).filter(x=>x.party);
+balance:num(r.BALANCE),
+credit:num(r["AVG CREDIT CYCLE"])
+})).filter(x=>x.party);
 
 renderDay("MONDAY");
 
-}
-
-function progressColor(p){
-if(p<40) return "red";
-if(p<70) return "orange";
-return "green";
-}
-
-function buildKPI(){
-
-let blocked=today.filter(p=>p.status==="BLOCKED");
-
-let unlock=blocked.reduce((a,b)=>a+b.balance,0);
-let target=blocked.reduce((a,b)=>a+b.reactivation,0);
-
-let percent=(fyCollection/fyBusiness*100)||0;
-
-let creditList=[...today]
-.filter(p=>p.credit>45)
-.sort((a,b)=>b.credit-a.credit)
-.slice(0,5)
-.map(p=>`${p.party} (${p.credit})`).join("<br>");
-
-return `
-<div class="kpi">
-<b>FY KPI</b><br>
-₹${fyBusiness.toFixed(0)} → ₹${fyCollection.toFixed(0)}
-<div style="background:#ddd;height:6px;border-radius:4px;margin:4px 0">
-<div style="width:${percent}%;height:6px;background:${progressColor(percent)}"></div>
-</div>
-<hr>
-<b>Mission</b><br>
-Collect ₹${target.toFixed(0)} → Unlock ₹${unlock.toFixed(0)}
-<hr>
-<b>Credit >45</b><br>${creditList}
-</div>
-`;
 }
 
 function setPanel(html){
@@ -151,21 +97,7 @@ panel.innerHTML=`
 <select onchange="renderDay(this.value)">
 ${Object.keys(tourPlan).map(d=>`<option>${d}</option>`)}
 </select>
-${buildKPI()}
 ${html}`;
-}
-
-function drawPins(){
-
-partyMarkers.forEach(m=>map.removeLayer(m));
-partyMarkers=[];
-
-today.forEach(p=>{
-if(p.lat&&p.lng){
-partyMarkers.push(L.circleMarker([p.lat,p.lng],{radius:6,color:"green"}).addTo(map));
-}
-});
-
 }
 
 function renderDay(day){
@@ -174,6 +106,7 @@ today=data.filter(d=>tourPlan[day].some(a=>d.area.includes(a)));
 
 pending=[...today];
 visited=[];
+currentParty=null;
 
 drawPins();
 
@@ -182,11 +115,52 @@ setPanel(`<b>${day}</b><br>🏪 ${today.length}
 
 }
 
-function startTour(){
-startLat=userLat;
-startLng=userLng;
-journeyStart=new Date();
-updateNext();
+function drawPins(){
+
+partyMarkers.forEach(m=>map.removeLayer(m));
+partyMarkers=[];
+
+today.forEach(p=>{
+
+let color="gray";
+
+if(visited.includes(p)) color="green";
+else if(currentParty===p) color="orange";
+
+let marker=L.circleMarker([p.lat,p.lng],{
+radius:7,
+color:color,
+fillColor:color,
+fillOpacity:1
+}).addTo(map);
+
+partyMarkers.push(marker);
+
+});
+
+}
+
+function buildRoute(){
+
+let lat=userLat,lng=userLng;
+let temp=[...pending];
+let coords=[[lat,lng]];
+
+while(temp.length){
+
+temp.forEach(p=>p.d=getDistance(lat,lng,p.lat,p.lng));
+temp.sort((a,b)=>a.d-b.d);
+
+let next=temp.shift();
+
+coords.push([next.lat,next.lng]);
+
+lat=next.lat;
+lng=next.lng;
+
+}
+
+return coords;
 }
 
 function drawRoute(){
@@ -194,21 +168,17 @@ function drawRoute(){
 if(routeLine) map.removeLayer(routeLine);
 if(!pending.length) return;
 
-let lat=userLat,lng=userLng;
-let temp=[...pending];
-let coords=[[lat,lng]];
-
-while(temp.length){
-temp.forEach(p=>p.d=getDistance(lat,lng,p.lat,p.lng));
-temp.sort((a,b)=>a.d-b.d);
-let n=temp.shift();
-coords.push([n.lat,n.lng]);
-lat=n.lat;lng=n.lng;
-}
+let coords=buildRoute();
 
 routeLine=L.polyline(coords,{color:"blue",weight:4}).addTo(map);
 map.fitBounds(routeLine.getBounds(),{padding:[40,40]});
 
+}
+
+function startTour(){
+startLat=userLat;
+startLng=userLng;
+updateNext();
 }
 
 function updateNext(){
@@ -220,44 +190,27 @@ pending.sort((a,b)=>a.dist-b.dist);
 
 currentParty=pending[0];
 
+drawPins();
 drawRoute();
 
-setPanel(`
-<b>${currentParty.party}</b><br>
-₹${currentParty.balance} | ${currentParty.credit} days<br>
-📍 ${currentParty.dist.toFixed(2)} km
-<button class="mainBtn" onclick="workflow()">${getBtnText()}</button>
-`);
+setPanel(`<b>${currentParty.party}</b>
+<br>📍 ${currentParty.dist.toFixed(2)} km
+<button class="mainBtn" onclick="completeVisit()">COMPLETE VISIT</button>`);
 
 }
 
-function getBtnText(){
-if(stage==="idle") return "START VISIT";
-if(stage==="start") return "ENTER COLLECTION";
-if(stage==="collect") return "COMPLETE VISIT";
-}
+function completeVisit(){
 
-function workflow(){
-
-if(stage==="idle"){visitStart=new Date();stage="start";updateNext();return;}
-
-if(stage==="start"){currentParty.amount=num(prompt("Enter collection"));stage="collect";updateNext();return;}
-
-if(stage==="collect"){
-
-let d=getDistance(userLat,userLng,currentParty.lat,currentParty.lng);
-
-visited.push({...currentParty,distance:d,time:(new Date()-visitStart)/1000});
-
+visited.push(currentParty);
 pending.shift();
 
 userLat=currentParty.lat;
 userLng=currentParty.lng;
 
-stage="idle";
+currentParty=null;
 
 updateNext();
-}
+
 }
 
 function returnToStart(){
@@ -265,32 +218,13 @@ function returnToStart(){
 if(routeLine) map.removeLayer(routeLine);
 
 routeLine=L.polyline([[userLat,userLng],[startLat,startLng]],{
-color:"red",weight:4,dashArray:"6,6"
+color:"red",dashArray:"6,6",weight:4
 }).addTo(map);
 
 map.fitBounds(routeLine.getBounds(),{padding:[40,40]});
 
-setPanel(`<button class="mainBtn" onclick="saveExpense()">ENTER TOUR EXPENSE</button>`);
-}
+setPanel("<b>Route Completed</b>");
 
-function saveExpense(){expense=num(prompt("Expense"));endTour();}
-
-function endTour(){
-
-let totalCollection=visited.reduce((a,b)=>a+(b.amount||0),0);
-let totalDistance=visited.reduce((a,b)=>a+b.distance,0);
-let totalTime=(new Date()-journeyStart)/3600000;
-
-let summary=`
-Distance: ${totalDistance.toFixed(2)} km
-Collection: ₹${totalCollection}
-Expense: ₹${expense}
-Net: ₹${totalCollection-expense}
-Recovery/km: ₹${(totalCollection/totalDistance||0).toFixed(0)}
-`;
-
-setPanel(`<pre>${summary}</pre>
-<button onclick="window.open('https://wa.me/?text='+encodeURIComponent(summary))">📄 SHARE WHATSAPP</button>`);
 }
 
 loadCSV();
