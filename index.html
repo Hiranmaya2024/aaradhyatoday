@@ -2,16 +2,17 @@
 <html>
 <head>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
 <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
 
 <style>
-body{margin:0;font-family:Arial}
-#map{height:65vh}
+body{margin:0;font-family:Arial;background:#f1f5f9}
+#map{height:58vh}
 .panel{padding:12px;background:#fff}
-button,select{width:100%;padding:12px;margin-top:6px;font-size:15px}
-.mainBtn{background:#16a34a;color:#fff;border:none;border-radius:8px}
+button,select{width:100%;padding:14px;margin-top:8px;border-radius:10px;border:none;font-weight:bold}
+.mainBtn{background:#16a34a;color:#fff}
 </style>
 </head>
 
@@ -24,34 +25,33 @@ button,select{width:100%;padding:12px;margin-top:6px;font-size:15px}
 
 const CSV="https://docs.google.com/spreadsheets/d/e/2PACX-1vQ3bMMFf71-vdGNiWFnf7pD9XuAAUSA7J-g08ocyC2LNiVOTUHi56lB-7bKTKj0KK9nJGs9vU0THQ0E/pub?gid=1044390124&single=true&output=csv";
 
-const tourPlan={
-MONDAY:["JURIA"],
-TUESDAY:["GHESS"],
-WEDNESDAY:["GAISILATE"],
-THURSDAY:["JHARBANDH"],
-FRIDAY:["PADAMPUR"],
-SATURDAY:["PAIKMAL","MANDOSIL"]
-};
+const ARRIVAL_RADIUS=0.05;
+const SPEED=50;
 
 let map=L.map("map").setView([20.9,83.4],11);
 L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(map);
 
-let livePos=[20.9,83.4];
-let routePos=[20.9,83.4];
+let live=[20.9,83.4];
+let startPoint;
 
-let data=[];
-let today=[];
-
+let data=[],today=[];
 let visited=new Set();
-let currentId=null;
+let routePos;
+let currentShop=null;
 
-let userMarker,routeLine;
-let pins=[];
+let journeyStart;
+let totalCollection=0;
+let expense=0;
+
+let routeLine,userMarker;
+
+const num=v=>Number(String(v||"").replace(/[^0-9.-]/g,""))||0;
 
 navigator.geolocation.watchPosition(pos=>{
-livePos=[pos.coords.latitude,pos.coords.longitude];
+live=[pos.coords.latitude,pos.coords.longitude];
 if(userMarker) map.removeLayer(userMarker);
-userMarker=L.circleMarker(livePos,{radius:8,color:"blue",fillColor:"blue",fillOpacity:1}).addTo(map);
+userMarker=L.circleMarker(live,{radius:8,color:"blue",fillColor:"blue",fillOpacity:1}).addTo(map);
+checkFinishEligibility();
 });
 
 function dist(a,b){
@@ -76,8 +76,13 @@ data=parsed.data.map((r,i)=>({
 id:i,
 party:r.PARTY,
 area:(r.AREA||"").toUpperCase(),
-lat:parseFloat(r.LAT),
-lng:parseFloat(r.LNG)
+lat:num(r.LAT),
+lng:num(r.LNG),
+balance:num(r.BALANCE),
+business:num(r.BUSINESS),
+credit:num(r["AVG CREDIT CYCLE"]),
+status:(r["ACCOUNT STATUS"]||"").toUpperCase(),
+reactivation:num(r["PAYMENT NEEDED TO REACTIVATE"])
 })).filter(x=>x.party);
 
 renderDay("MONDAY");
@@ -86,38 +91,26 @@ renderDay("MONDAY");
 
 function renderDay(day){
 
-today=data.filter(d=>tourPlan[day].some(a=>d.area.includes(a)));
-
+today=data;
 visited.clear();
-currentId=null;
+routePos=[...live];
+startPoint=[...live];
 
-routePos=[...livePos];
+panel.innerHTML=`<b>${day}</b>
+<button class="mainBtn" onclick="startTour()">START TOUR</button>`;
 
-draw();
-
-panel.innerHTML=`
-<select onchange="renderDay(this.value)">
-${Object.keys(tourPlan).map(d=>`<option>${d}</option>`)}
-</select>
-<b>${day}</b><br>🏪 ${today.length}
-<button class="mainBtn" onclick="start()">START TOUR</button>
-`;
+drawPins();
 
 }
 
-function draw(){
-
-pins.forEach(p=>map.removeLayer(p));
-pins=[];
+function drawPins(){
 
 today.forEach(p=>{
 let color="gray";
 if(visited.has(p.id)) color="green";
-if(currentId===p.id) color="orange";
+if(currentShop && currentShop.id===p.id) color="orange";
 
-pins.push(
-L.circleMarker([p.lat,p.lng],{radius:7,color:color,fillColor:color,fillOpacity:1}).addTo(map)
-);
+L.circleMarker([p.lat,p.lng],{radius:6,color}).addTo(map);
 });
 
 }
@@ -125,41 +118,39 @@ L.circleMarker([p.lat,p.lng],{radius:7,color:color,fillColor:color,fillOpacity:1
 function buildRoute(){
 
 let remaining=today.filter(p=>!visited.has(p.id));
-let temp=[...remaining];
 
 let pos=[...routePos];
 let coords=[pos];
 
-while(temp.length){
+while(remaining.length){
 
-temp.sort((a,b)=>
-dist(pos,[a.lat,a.lng]) - dist(pos,[b.lat,b.lng])
-);
+remaining.sort((a,b)=>dist(pos,[a.lat,a.lng])-dist(pos,[b.lat,b.lng]));
 
-let next=temp.shift();
+let next=remaining.shift();
 coords.push([next.lat,next.lng]);
 pos=[next.lat,next.lng];
 
 }
 
-return coords;
+coords.push(startPoint);
 
+return coords;
 }
 
 function drawRoute(){
 
 if(routeLine) map.removeLayer(routeLine);
 
-let coords=buildRoute();
-
-routeLine=L.polyline(coords,{color:"blue",weight:4}).addTo(map);
-
+routeLine=L.polyline(buildRoute(),{color:"blue",weight:4}).addTo(map);
 map.fitBounds(routeLine.getBounds(),{padding:[40,40]});
 
 }
 
-function start(){
+function startTour(){
+
+journeyStart=new Date();
 goNext();
+
 }
 
 function goNext(){
@@ -167,53 +158,76 @@ function goNext(){
 let remaining=today.filter(p=>!visited.has(p.id));
 
 if(!remaining.length){
-finish();
+panel.innerHTML+="<br>Return to start to finish tour";
 return;
 }
 
-remaining.sort((a,b)=>
-dist(routePos,[a.lat,a.lng]) - dist(routePos,[b.lat,b.lng])
-);
+remaining.sort((a,b)=>dist(routePos,[a.lat,a.lng])-dist(routePos,[b.lat,b.lng]));
 
-let next=remaining[0];
+currentShop=remaining[0];
 
-currentId=next.id;
-
-draw();
 drawRoute();
 
-panel.innerHTML+=`
-<br><b>${next.party}</b>
-<button class="mainBtn" onclick="visit()">VISIT DONE</button>
+panel.innerHTML=`
+<b>${currentShop.party}</b>
+₹${currentShop.balance}
+<button class="mainBtn" onclick="visitFlow()">START VISIT</button>
 `;
 
 }
 
-function visit(){
+function visitFlow(){
 
-let shop=today.find(p=>p.id===currentId);
+let amt=prompt("Enter collection");
+totalCollection+=num(amt);
 
-visited.add(currentId);
-routePos=[shop.lat,shop.lng];
-
-currentId=null;
+visited.add(currentShop.id);
+routePos=[currentShop.lat,currentShop.lng];
 
 goNext();
 
 }
 
-function finish(){
+function checkFinishEligibility(){
 
-if(routeLine) map.removeLayer(routeLine);
+if(!startPoint) return;
 
-routeLine=L.polyline([routePos,livePos],{
-color:"red",dashArray:"6,6",weight:4
-}).addTo(map);
+if(dist(live,startPoint)<ARRIVAL_RADIUS && visited.size===today.length){
 
-map.fitBounds(routeLine.getBounds(),{padding:[40,40]});
+panel.innerHTML=`<button class="mainBtn" onclick="finishTour()">FINISH TOUR</button>`;
 
-panel.innerHTML+="<br><b>Route Completed</b>";
+}
 
+}
+
+function finishTour(){
+
+expense=num(prompt("Enter expense"));
+
+let totalDistance=routeLine.getLatLngs().reduce((a,c,i,arr)=>{
+if(i==0) return 0;
+return a+dist([arr[i-1].lat,arr[i-1].lng],[c.lat,c.lng]);
+},0);
+
+let summary=`
+Distance: ${totalDistance.toFixed(2)} km
+Collection: ₹${totalCollection}
+Expense: ₹${expense}
+Net: ₹${totalCollection-expense}
+`;
+
+panel.innerHTML=`<pre>${summary}</pre>
+<button onclick="window.open('https://wa.me/?text='+encodeURIComponent(summary))">Share WhatsApp</button>
+<button onclick="download(summary)">Download</button>`;
+
+}
+
+function download(text){
+let blob=new Blob([text]);
+let a=document.createElement("a");
+a.href=URL.createObjectURL(blob);
+a.download="tour_report.txt";
+a.click();
 }
 
 load();
