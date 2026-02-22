@@ -3,30 +3,25 @@
 <head>
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
 <title>AARADHYA TODAY</title>
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
-
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
 
 <style>
-
 body{font-family:Arial;margin:0;background:#f1f5f9}
 .main{display:flex;height:100vh}
 .left{width:40%;overflow:auto;background:#fff}
 .right{width:60%;padding:10px}
 .card{background:#fff;padding:12px;border-radius:10px;margin-bottom:10px}
-#map{height:260px;border-radius:10px}
-
+#map{height:280px;border-radius:10px}
 .party{padding:10px;border-bottom:1px solid #eee;cursor:pointer}
 .block{border-left:4px solid red}
 .active{border-left:4px solid green}
-
 </style>
-</head>
 
+</head>
 <body>
 
 <div class="main">
@@ -50,13 +45,27 @@ body{font-family:Arial;margin:0;background:#f1f5f9}
 
 const CSV="https://docs.google.com/spreadsheets/d/e/2PACX-1vQ3bMMFf71-vdGNiWFnf7pD9XuAAUSA7J-g08ocyC2LNiVOTUHi56lB-7bKTKj0KK9nJGs9vU0THQ0E/pub?gid=1044390124&single=true&output=csv";
 
-let map = L.map('map').setView([20.9,83.4], 10);
+const tourPlan={
+Monday:["JURIA"],
+Tuesday:["GHESS"],
+Wednesday:["GAISILATE"],
+Thursday:["JHARBANDH"],
+Friday:["PADAMPUR"],
+Saturday:["PAIKMAL","MANDOSIL"]
+};
+
+let map = L.map('map').setView([20.9,83.4],10);
 
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
-let data=[],today=[],route=[],visits=[];
+let data=[],today=[],route=[],visits=[],markers=[];
 
 const num=v=>Number(String(v||0).replace(/[^0-9.-]/g,""))||0;
+
+function todayName(){
+let d=new Date().toLocaleDateString("en-US",{weekday:"long"});
+return tourPlan[d]?d:"Monday";
+}
 
 function load(){
 
@@ -67,26 +76,28 @@ skipEmptyLines:true,
 complete:res=>{
 
 data=res.data.map(r=>({
-party:r["PARTY"],
-area:r["AREA"],
-status:r["ACCOUNT STATUS"],
+
+party:(r["PARTY"]||"").trim(),
+area:(r["AREA"]||"").toUpperCase().trim(),
+status:(r["ACCOUNT STATUS"]||"").trim(),
 balance:num(r["BALANCE"]),
 credit:num(r["AVG CREDIT CYCLE"]),
-lat:Number(r["LAT"]),
-lng:Number(r["LNG"])
-}));
+lat:parseFloat(r["LAT"]),
+lng:parseFloat(r["LNG"])
+
+})).filter(x=>x.party);
 
 render();
 
 }
-
 });
 
 }
 
 function render(){
 
-today=data;
+let areas=tourPlan[todayName()];
+today=data.filter(x=>areas.includes(x.area));
 
 partyList.innerHTML=today.map(p=>`
 <div class="party ${p.status==="BLOCK"?"block":"active"}"
@@ -98,34 +109,37 @@ drawMap();
 
 }
 
-function getColor(p){
-
-if(visits.find(v=>v.party===p.party)) return "grey";
-if(route.length && route[0].party===p.party) return "gold";
-if(p.status==="BLOCK") return "red";
-return "green";
-
-}
-
 function drawMap(){
 
-map.eachLayer(layer=>{
-if(layer instanceof L.Marker) map.removeLayer(layer);
+markers.forEach(m=>map.removeLayer(m));
+markers=[];
+
+let valid=today.filter(p=>!isNaN(p.lat) && !isNaN(p.lng));
+
+if(!valid.length) return;
+
+let bounds=[];
+
+valid.forEach(p=>{
+
+let color="green";
+
+if(visits.find(v=>v.party===p.party)) color="grey";
+else if(route.length && route[0].party===p.party) color="gold";
+else if(p.status==="BLOCK") color="red";
+
+let marker=L.circleMarker([p.lat,p.lng],{
+radius:8,color:color,fillOpacity:0.9
+})
+.addTo(map)
+.on("click",()=>showParty(p.party));
+
+markers.push(marker);
+bounds.push([p.lat,p.lng]);
+
 });
 
-today.forEach(p=>{
-
-if(!p.lat) return;
-
-let marker = L.circleMarker([p.lat,p.lng],{
-radius:8,
-color:getColor(p),
-fillOpacity:0.9
-}).addTo(map);
-
-marker.on("click",()=>showParty(p.party));
-
-});
+map.fitBounds(bounds);
 
 }
 
