@@ -176,16 +176,55 @@ launch.style.display="none"
 listScreen.style.display="block"
 }
 
+/* ✅ Proper CSV Parser (handles commas inside values) */
+function parseCSV(text) {
+const rows = []
+let row = []
+let value = ""
+let insideQuotes = false
+
+for (let char of text) {
+
+if (char === '"' ) {
+insideQuotes = !insideQuotes
+continue
+}
+
+if (char === ',' && !insideQuotes) {
+row.push(value)
+value = ""
+continue
+}
+
+if ((char === '\n' || char === '\r') && !insideQuotes) {
+if (value || row.length) {
+row.push(value)
+rows.push(row)
+row = []
+value = ""
+}
+continue
+}
+
+value += char
+}
+return rows
+}
+
 fetch(csvUrl)
-.then(res=>res.text())
-.then(data=>{
+.then(res => res.text())
+.then(text => {
 
-const rows = data.trim().split("\n").slice(1) // START FROM ROW 2
+let rows = parseCSV(text)
 
-rows.forEach(row=>{
-let col = row.split(",")
+/* ✅ REMOVE HEADER ROW FORCEFULLY */
+rows = rows.slice(1)
 
-customers.push({
+/* ✅ REMOVE EMPTY ROWS */
+rows = rows.filter(r => r[0] && r[0].trim() !== "")
+
+customers = rows.map(col => ({
+
 name:col[0],
 area:col[1],
 status:col[2],
@@ -198,8 +237,8 @@ lat:col[14],
 lng:col[15],
 lastSale:col[17],
 lastCollection:col[18]
-})
-})
+
+}))
 
 renderList(customers)
 
@@ -265,6 +304,5 @@ window.open(`https://www.google.com/maps?q=${selected.lat},${selected.lng}`)
 }
 
 </script>
-
 </body>
 </html>
