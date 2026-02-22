@@ -86,8 +86,7 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 let data=[],today=[],visits=[],markers=[];
 let userLat=20.9,userLng=83.4;
 let totalDistance=0,journeyStartTime=null,totalStops=0;
-
-let visitState={current:null,startTime:null,amount:0};
+let visitState={};
 
 const num=v=>Number(String(v||0).replace(/[^0-9.-]/g,""))||0;
 
@@ -126,6 +125,35 @@ render();
 }});
 }
 
+function resetDayState(){
+visits=[];
+markers.forEach(m=>map.removeLayer(m));
+markers=[];
+totalDistance=0;
+journeyStartTime=null;
+}
+
+function render(){
+
+resetDayState();
+
+let areas=tourPlan[daySelect.value];
+areaInfo.innerHTML="Areas → "+areas.join(", ");
+
+today=data.filter(d=>areas.some(a=>d.area.includes(a)));
+totalStops=today.length;
+
+generateTourPlan();
+renderSummary();
+
+partyList.innerHTML=today.map(p=>`
+<div class="party ${p.status==="BLOCK"?"block":"active"}"
+onclick="showParty('${p.party}')">${p.party}</div>`).join("");
+
+drawMap();
+nextVisit();
+}
+
 function generateTourPlan(){
 
 let valid=today.filter(p=>!isNaN(p.lat));
@@ -148,119 +176,46 @@ let travelTime=totalDist/SPEED;
 let visitTime=(today.length*VISIT_MIN)/60;
 let totalTime=travelTime+visitTime;
 
-let now=new Date();
-let endDay=new Date();
-endDay.setHours(18,0,0,0);
-
-let availableHours=(endDay-now)/3600000;
-
-let feasibilityHTML=availableHours>=totalTime
-? `<h3 style="color:green">🟢 Feasible</h3>`
-: `<h3 style="color:red">🔴 Not Feasible</h3>`;
-
 planBox.innerHTML=`
 <h3>🧭 Today’s Tour Plan</h3>
 💰 ₹${expectedCollection}<br>
 📍 ${totalDist.toFixed(2)} km<br>
-⏱ ${totalTime.toFixed(2)} hrs<br>
-${feasibilityHTML}
+⏱ ${totalTime.toFixed(2)} hrs
 `;
-
-}
-
-function render(){
-
-let areas=tourPlan[daySelect.value];
-areaInfo.innerHTML="Areas → "+areas.join(", ");
-
-today=data.filter(d=>areas.some(a=>d.area.includes(a)));
-totalStops=today.length;
-
-generateTourPlan();
-renderSummary();
-
-partyList.innerHTML=today.map(p=>`
-<div class="party ${p.status==="BLOCK"?"block":"active"}"
-onclick="showParty('${p.party}')">${p.party}</div>`).join("");
-
-drawMap();
-nextVisit();
 }
 
 function renderSummary(){
-let collected=visits.reduce((a,b)=>a+b.amount,0);
-let progress=totalStops?(visits.length/totalStops)*100:0;
-
-summary.innerHTML=`
-💰 Collected ₹${collected}<br>
-📊 Progress ${progress.toFixed(0)}%
-<div class="progressBar"><div class="progressFill" style="width:${progress}%"></div></div>
-`;
+summary.innerHTML=`Visits: ${visits.length}/${totalStops}`;
 }
 
 function drawMap(){
-markers.forEach(m=>map.removeLayer(m));
-markers=[];
+
+let bounds=[];
 
 today.forEach(p=>{
 if(isNaN(p.lat)||isNaN(p.lng))return;
 
-let color="green";
-if(visits.find(v=>v.party===p.party))color="grey";
-else if(visitState.current&&visitState.current.party===p.party)color="gold";
-else if(p.status==="BLOCK")color="red";
+let marker=L.circleMarker([p.lat,p.lng],{radius:8,color:"green"})
+.addTo(map);
 
-L.circleMarker([p.lat,p.lng],{radius:8,color:color,fillOpacity:0.9}).addTo(map);
+markers.push(marker);
+bounds.push([p.lat,p.lng]);
 });
+
+if(bounds.length)map.fitBounds(bounds);
 }
 
-async function generateFinalReport(){
-
-await new Promise(r=>setTimeout(r,800));
-
-let canvas=await html2canvas(document.getElementById("map"));
-let img=canvas.toDataURL("image/png");
-
-let totalCollection=visits.reduce((a,b)=>a+b.amount,0);
-let totalTime=(new Date()-journeyStartTime)/3600000;
-let recoveryPerKm=totalDistance?(totalCollection/totalDistance).toFixed(0):0;
-
-const { jsPDF } = window.jspdf;
-let pdf=new jsPDF();
-pdf.text("AARADHYA SMART TOUR REPORT",20,20);
-pdf.addImage(img,'PNG',15,30,180,80);
-
-window.downloadPDF=()=>pdf.save("Tour_Report.pdf");
-
-function downloadImage(){
-let a=document.createElement("a");
-a.href=img;
-a.download="Route_Map.png";
-a.click();
+function nextVisit(){
+if(!today.length){
+aiBox.innerHTML="No parties for this day";
+return;
+}
+aiBox.innerHTML="Ready to start visits";
 }
 
-let msg=`🏁 Route Completed
-📍 ${totalDistance.toFixed(2)} km
-💰 ₹${totalCollection}
-⏱ ${totalTime.toFixed(2)} hrs
-🏪 ${visits.length}
-📊 ₹${recoveryPerKm}/km`;
-
-let waLink=`https://wa.me/?text=${encodeURIComponent(msg)}`;
-
-aiBox.innerHTML=`
-<h2>🏁 Route Completed</h2>
-<img src="${img}" style="width:100%"><br><br>
-
-📊 ₹${recoveryPerKm}/km<br><br>
-
-<a href="${waLink}" target="_blank">
-<button class="btn go">📤 WhatsApp</button>
-</a>
-
-<button class="btn collect" onclick="downloadPDF()">📄 PDF</button>
-<button class="btn stop" onclick="downloadImage()">🖼 Image</button>
-`;
+function showParty(name){
+let p=data.find(x=>x.party===name);
+partyCard.innerHTML=`<h3>${p.party}</h3>₹${p.balance}`;
 }
 
 load();
