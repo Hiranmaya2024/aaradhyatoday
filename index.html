@@ -11,107 +11,57 @@
 <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 
 <style>
-
 body{font-family:Arial;margin:0;background:#f1f5f9}
-
-.header{
-background:#fff;
-padding:10px;
-text-align:center;
-border-bottom:1px solid #ddd
-}
-
-.main{
-display:flex;
-height:calc(100vh - 90px)
-}
-
-.left{
-width:40%;
-overflow:auto;
-background:#fff
-}
-
-.right{
-width:60%;
-padding:10px
-}
-
-.card{
-background:#fff;
-padding:12px;
-border-radius:10px;
-margin-bottom:10px
-}
-
+.header{background:#fff;padding:10px;text-align:center;border-bottom:1px solid #ddd}
+.main{display:flex;height:calc(100vh - 90px)}
+.left{width:40%;overflow:auto;background:#fff}
+.right{width:60%;padding:10px}
+.card{background:#fff;padding:12px;border-radius:10px;margin-bottom:10px}
 #map{height:260px;border-radius:10px}
 
-.party{
-padding:10px;
-border-bottom:1px solid #eee;
-cursor:pointer
-}
-
+.party{padding:10px;border-bottom:1px solid #eee;cursor:pointer}
 .block{border-left:4px solid red}
 .active{border-left:4px solid green}
 
-.btn{
-padding:8px 12px;
-border:none;
-border-radius:8px;
-color:#fff;
-margin:5px 5px 0 0
-}
-
+.btn{padding:8px 12px;border:none;border-radius:8px;color:#fff;margin:5px 5px 0 0}
 .stop{background:#f97316}
 .collect{background:#2563eb}
 .go{background:#16a34a}
 .disabled{background:#9ca3af}
 
-.progressBar{
-height:10px;
-background:#e5e7eb;
-border-radius:10px;
-overflow:hidden;
-margin-top:6px
-}
-
-.progressFill{
-height:100%;
-background:#16a34a;
-width:0%
-}
+.progressBar{height:10px;background:#e5e7eb;border-radius:10px;overflow:hidden;margin-top:6px}
+.progressFill{height:100%;background:#16a34a;width:0%}
 
 @media(max-width:768px){
 .main{flex-direction:column}
 .left,.right{width:100%}
 }
-
 </style>
-</head>
 
+</head>
 <body>
 
 <div class="header">
-
 <b>Select Day:</b>
 <select id="daySelect"></select>
 <div id="areaInfo"></div>
-
 </div>
 
 <div class="main">
 
 <div class="left">
+
+<div class="card" id="planBox"></div>
 <div class="card" id="summary"></div>
 <div id="partyList"></div>
+
 </div>
 
 <div class="right">
 
-<div class="card" id="aiBox">Start journey</div>
+<div class="card" id="aiBox"></div>
 <div id="map"></div>
-<div class="card" id="partyCard">Select a party</div>
+<div class="card" id="partyCard"></div>
 
 </div>
 
@@ -120,6 +70,9 @@ width:0%
 <script>
 
 const CSV="https://docs.google.com/spreadsheets/d/e/2PACX-1vQ3bMMFf71-vdGNiWFnf7pD9XuAAUSA7J-g08ocyC2LNiVOTUHi56lB-7bKTKj0KK9nJGs9vU0THQ0E/pub?gid=1044390124&single=true&output=csv";
+
+const SPEED=50;
+const VISIT_MIN=15;
 
 const tourPlan={
 MONDAY:["JURIA"],
@@ -160,9 +113,7 @@ daySelect.onchange=render;
 
 function load(){
 Papa.parse(CSV,{
-download:true,
-header:true,
-skipEmptyLines:true,
+download:true,header:true,skipEmptyLines:true,
 complete:res=>{
 data=res.data.map(r=>({
 party:(r["PARTY"]||"").trim(),
@@ -175,8 +126,40 @@ lat:parseFloat(r["LAT"]),
 lng:parseFloat(r["LNG"])
 })).filter(x=>x.party);
 render();
+}});
 }
-});
+
+function generateTourPlan(){
+
+let valid=today.filter(p=>!isNaN(p.lat));
+if(!valid.length)return;
+
+let temp=[...valid];
+let refLat=userLat,refLng=userLng,totalDist=0;
+
+while(temp.length){
+temp.forEach(p=>p.distance=getDistance(refLat,refLng,p.lat,p.lng));
+temp.sort((a,b)=>a.distance-b.distance);
+let next=temp.shift();
+totalDist+=next.distance;
+refLat=next.lat;
+refLng=next.lng;
+}
+
+let expectedCollection=today.reduce((a,b)=>a+b.reactivate,0);
+let travelTime=totalDist/SPEED;
+let visitTime=(today.length*VISIT_MIN)/60;
+let totalTime=travelTime+visitTime;
+
+planBox.innerHTML=`
+<h3>🧭 Today’s Tour Plan</h3>
+💰 Expected Collection: <b>₹${expectedCollection}</b><br>
+📍 Distance: <b>${totalDist.toFixed(2)} km</b><br>
+🚗 Travel Time: <b>${travelTime.toFixed(2)} hrs</b><br>
+🕒 Visit Time: <b>${visitTime.toFixed(2)} hrs</b><br>
+<h3>⏱ Total Time: ${totalTime.toFixed(2)} hrs</h3>
+`;
+
 }
 
 function render(){
@@ -187,6 +170,7 @@ areaInfo.innerHTML="Areas → "+areas.join(", ");
 today=data.filter(d=>areas.some(a=>d.area.includes(a)));
 totalStops=today.length;
 
+generateTourPlan();
 renderSummary();
 
 partyList.innerHTML=today.map(p=>`
@@ -243,9 +227,7 @@ if(!pending.length){generateFinalReport();return;}
 
 let refLat=userLat,refLng=userLng;
 
-pending.forEach(p=>{
-p.distance=getDistance(refLat,refLng,p.lat,p.lng);
-});
+pending.forEach(p=>p.distance=getDistance(refLat,refLng,p.lat,p.lng));
 
 pending.sort((a,b)=>(a.distance-b.distance)||(b.balance-a.balance));
 
