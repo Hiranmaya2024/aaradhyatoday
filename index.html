@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Aaradhya Tour</title>
+<title>Aaradhya Tour Dashboard</title>
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
 
 <style>
@@ -21,7 +21,7 @@ box-shadow:0 2px 10px rgba(0,0,0,0.08)
 
 .partyList{max-height:160px;overflow:auto;font-size:13px}
 
-/* GRID */
+/* CUSTOMER GRID */
 .grid{padding:10px;display:grid;gap:12px}
 .customer{
 background:#fff;padding:14px;border-radius:12px;
@@ -141,37 +141,22 @@ Math.sin(dLng/2)**2
 return (R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a))).toFixed(1)+" km"
 }
 
-function calcRoute(){
-let total=0,prevLat=userLat,prevLng=userLng
-todayRoute.forEach(p=>{
-if(p.lat){
-total+=parseFloat(distanceValue(prevLat,prevLng,p.lat,p.lng))
-prevLat=p.lat;prevLng=p.lng}})
-return total
-}
-
-function distanceValue(a,b,c,d){
-const R=6371
-const dLat=(c-a)*Math.PI/180
-const dLng=(d-b)*Math.PI/180
-const x=Math.sin(dLat/2)**2+
-Math.cos(a*Math.PI/180)*Math.cos(c*Math.PI/180)*
-Math.sin(dLng/2)**2
-return R*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x))
-}
-
 function renderAll(){
 
-if(customers.length===0) return
+let totalDist=0,prevLat=userLat,prevLng=userLng
 
-let totalDist=calcRoute().toFixed(1)
+todayRoute.forEach(p=>{
+if(p.lat){
+totalDist+=parseFloat(distanceValue(prevLat,prevLng,p.lat,p.lng))
+prevLat=p.lat;prevLng=p.lng}})
+
 let time=(totalDist/25).toFixed(1)
 
 routeBox.innerHTML=`
 <div>
 <b>🗓 Today’s Route – ${todayAreas.join(", ")}</b><br>
 Parties: ${todayRoute.length}<br>
-📏 ${totalDist} km<br>
+📏 ${totalDist.toFixed(1)} km<br>
 ⏱ ${time} hrs
 <button class="tour" onclick="startTour()">🧭 Start Tour</button>
 </div>
@@ -186,7 +171,6 @@ ${i+1}. ${c.name}<br>
 `
 
 customerGrid.innerHTML=""
-
 customers.forEach(c=>{
 customerGrid.innerHTML+=`
 <div class="customer" onclick="openProfileByName('${c.name}')">
@@ -197,15 +181,40 @@ ${c.area} | ₹${c.due} | 📍 ${distance(c.lat,c.lng)}
 
 }
 
+function distanceValue(a,b,c,d){
+const R=6371
+const dLat=(c-a)*Math.PI/180
+const dLng=(d-b)*Math.PI/180
+const x=Math.sin(dLat/2)**2+
+Math.cos(a*Math.PI/180)*Math.cos(c*Math.PI/180)*
+Math.sin(dLng/2)**2
+return R*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x))
+}
+
 function openProfileByName(name){
 
 selected=customers.find(c=>c.name===name)
+
+const today=new Date()
+const creditDays=Math.floor((today-new Date(selected.lastSale))/(1000*60*60*24))
+const agingDays=Math.floor((today-new Date(selected.lastCollection))/(1000*60*60*24))
+
+let aging="🟢 Current"
+if(agingDays>30) aging="🟡 Attention"
+if(agingDays>60) aging="🟠 Risk"
+if(agingDays>90) aging="🔴 Critical"
+
+let statusColor=selected.status.toLowerCase().includes("blocked")?"#e53935":"#34a853"
+
+let collectNow=(selected.due>0 && creditDays>60)?`
+<div style="background:#ffebee;color:#c62828;padding:10px;border-radius:10px;font-weight:600;margin-bottom:10px">
+💰 Collect Now – High Credit Days
+</div>`:""
 
 mainScreen.style.display="none"
 profileScreen.style.display="block"
 
 profileScreen.innerHTML=`
-
 <div class="profileWrapper">
 
 <div class="profileHeader">
@@ -217,19 +226,28 @@ Aaradhya Tour Dashboard
 
 <h2>${selected.name}</h2>
 
+<div class="info"><b>Status:</b>
+<span style="background:${statusColor};color:#fff;padding:4px 10px;border-radius:20px;font-size:12px">
+${selected.status}
+</span>
+</div>
+
+${collectNow}
+
 <div class="info"><b>Phone:</b> <a href="tel:${selected.phone}">${selected.phone}</a></div>
-<div class="info"><b>Agent:</b> ${selected.area}</div>
+<div class="info"><b>Area:</b> ${selected.area}</div>
 
-<div class="info"><b>Total Business:</b> ${selected.business}</div>
-<div class="info"><b>Total Due:</b> ${selected.due}</div>
+<div class="info"><b>Total Business:</b> ₹${selected.business}</div>
+<div class="info"><b>Total Due:</b> ₹${selected.due}</div>
 
-<div class="info"><b>Last Date:</b> ${selected.lastSale}</div>
+<div class="info"><b>Credit Days:</b> ${creditDays} days</div>
+<div class="info"><b>Outstanding Aging:</b> ${aging}</div>
+
+<div class="info"><b>Last Sale:</b> ${selected.lastSale}</div>
 <div class="info"><b>Last Collection:</b> ${selected.lastCollection}</div>
 
-<div class="info"><b>Reason:</b> ${selected.status}</div>
 <div class="info"><b>Reason:</b> ${selected.reason}</div>
-
-<div class="info"><b>Recalculate by paying:</b> ${selected.reactivate}</div>
+<div class="info"><b>Reactivate by paying:</b> ₹${selected.reactivate}</div>
 
 <div class="actionRow">
 <button class="call" onclick="call()">📞 Call</button>
@@ -252,6 +270,5 @@ function whatsapp(){window.open(`https://wa.me/91${selected.phone}`)}
 function navigate(){window.open(`https://www.google.com/maps?q=${selected.lat},${selected.lng}`)}
 
 </script>
-
 </body>
 </html>
