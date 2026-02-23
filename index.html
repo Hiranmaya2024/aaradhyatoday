@@ -2,37 +2,43 @@
 <html lang="en">
 <head>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AAradhya Tour</title>
+<title>AAradhya Customers</title>
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
 
 <style>
 body{font-family:Poppins;margin:0;background:#f4f6f9}
 #launch{height:100vh;display:flex;justify-content:center;align-items:center;text-align:center;background:#0f2027;color:#fff}
 .header{background:#0d6efd;color:#fff;padding:14px;font-weight:600}
-.routeBox{background:#fff;margin:10px;padding:12px;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,0.08)}
 .searchBox{padding:10px;background:#fff}
 input{width:100%;padding:12px;border-radius:10px;border:1px solid #ddd}
+
 .list{padding:10px;display:grid;gap:10px}
 .customer{background:#fff;padding:14px;border-radius:12px;box-shadow:0 2px 6px rgba(0,0,0,0.08)}
+
 .card{background:#fff;margin:12px;padding:18px;border-radius:14px}
+.row{display:flex;justify-content:space-between;margin:6px 0}
+
 .actions{position:fixed;bottom:0;width:100%;background:#fff;display:flex;gap:10px;padding:10px}
 button{flex:1;padding:14px;border:none;border-radius:10px;color:#fff;font-weight:600}
 .call{background:#28a745}.wa{background:#25D366}.nav{background:#0d6efd}
-.tourBtn{background:#ff9800;margin-top:10px}
+
+.tourBtn{background:#ff9800;margin-top:10px;width:100%}
 </style>
 </head>
 
 <body>
 
 <div id="launch" onclick="startApp()">
-<div><h2>Welcome to</h2><h1>AAradhya Pharmaceuticals</h1><p>Tap to continue</p></div>
+<div>
+<h2>Welcome to</h2>
+<h1>AAradhya Pharmaceuticals</h1>
+<p>Tap to continue</p>
+</div>
 </div>
 
 <div id="listScreen" style="display:none">
 
 <div class="header">Customers</div>
-
-<div id="routeBox" class="routeBox">📍 Getting today’s route…</div>
 
 <div class="searchBox">
 <input type="text" placeholder="Search customer..." onkeyup="searchCustomer(this.value)">
@@ -67,7 +73,7 @@ Saturday:["Paikmal","Mandosil"]
 }
 
 let customers=[],todayRoute=[],selected={}
-let userLat,userLng
+let userLat=null,userLng=null
 
 const today=new Date().toLocaleDateString('en-US',{weekday:'long'})
 const todayAreas=tourPlan[today]||[]
@@ -76,7 +82,6 @@ navigator.geolocation.getCurrentPosition(pos=>{
 userLat=pos.coords.latitude
 userLng=pos.coords.longitude
 renderList(customers)
-drawRouteSummary()
 })
 
 function startApp(){
@@ -84,7 +89,7 @@ launch.style.display="none"
 listScreen.style.display="block"
 }
 
-/* CSV PARSER */
+/* CSV parser */
 function parseCSV(text){
 const rows=[];let row=[],value="",insideQuotes=false
 for(let char of text){
@@ -104,91 +109,80 @@ fetch(csvUrl)
 let rows=parseCSV(text).slice(1).filter(r=>r[0])
 
 customers=rows.map(r=>({
-name:r[0],
-area:r[1],
-status:r[2],
-due:parseFloat(r[6])||0,
-phone:r[13],
+
+name:r[0],          // A
+area:r[1],          // B
+status:r[2],        // C
+reason:r[3],        // D
+reactivate:r[4],    // E
+business:r[5],      // F
+due:parseFloat(r[6])||0, // G
+phone:r[13],        // N
 lat:parseFloat(r[14]),
 lng:parseFloat(r[15]),
-business:r[5],
-reason:r[3],
-reactivate:r[4],
-lastSale:r[17],
-lastCollection:r[18]
+lastSale:r[17],     // R
+lastCollection:r[18] // S
+
 }))
 
 customers.sort((a,b)=>b.due-a.due)
 
 todayRoute=customers.filter(c=>todayAreas.includes(c.area))
 
-showRouteList()
 renderList(customers)
-drawRouteSummary()
 
 })
 
-function showRouteList(){
-routeBox.innerHTML=`<b>🗓 Today’s Route – ${todayAreas.join(", ")}</b><br>
-Parties: ${todayRoute.length}`
-}
-
-function drawRouteSummary(){
-
-if(!userLat || todayRoute.length===0) return
-
-let totalDistance=0
-
-todayRoute.forEach(p=>{
-if(p.lat){
-totalDistance+=getDistanceValue(userLat,userLng,p.lat,p.lng)
-}
-})
-
-let avgSpeed=25
-let time=(totalDistance/avgSpeed).toFixed(1)
-
-routeBox.innerHTML+=`<br>📏 ${totalDistance.toFixed(1)} km
-<br>⏱ ${time} hrs`
-}
-
-function getDistanceValue(lat1,lng1,lat2,lng2){
+function getDistance(lat,lng){
+if(!lat||!lng) return "—"
+if(!userLat) return "Locating..."
 const R=6371
-const dLat=(lat2-lat1)*Math.PI/180
-const dLng=(lng2-lng1)*Math.PI/180
+const dLat=(lat-userLat)*Math.PI/180
+const dLng=(lng-userLng)*Math.PI/180
 const a=Math.sin(dLat/2)**2+
-Math.cos(lat1*Math.PI/180)*
-Math.cos(lat2*Math.PI/180)*
+Math.cos(userLat*Math.PI/180)*
+Math.cos(lat*Math.PI/180)*
 Math.sin(dLng/2)**2
-return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a))
+return (R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a))).toFixed(1)+" km"
 }
 
 function renderList(data){
 customerList.innerHTML=""
 data.forEach((c,i)=>{
+
 let bg="#fff"
 if(c.status?.toLowerCase().includes("blocked")) bg="#ffebee"
 else if(c.due>0) bg="#fff3cd"
 
 customerList.innerHTML+=`
 <div class="customer" onclick="openProfile(${i})" style="background:${bg}">
-${c.name}<br>
-<small>Due ₹${c.due}</small>
+<b>${c.name}</b><br>
+${c.area} | ₹${c.due} | 📍 ${getDistance(c.lat,c.lng)}
 </div>`
 })
 }
 
 function openProfile(i){
 selected=customers[i]
+
 listScreen.style.display="none"
 profileScreen.style.display="block"
 
 profileCard.innerHTML=`
 <div class="card">
+
 <h3>${selected.name}</h3>
-Phone: ${selected.phone}<br>
-Area: ${selected.area}<br>
-Total Due: ₹${selected.due}
+
+<div class="row"><div>Phone</div><div><a href="tel:${selected.phone}">${selected.phone}</a></div></div>
+<div class="row"><div>Area</div><div>${selected.area}</div></div>
+<div class="row"><div>Total Business</div><div>₹${selected.business}</div></div>
+<div class="row"><div>Total Due</div><div>₹${selected.due}</div></div>
+<div class="row"><div>Last Sale</div><div>${selected.lastSale}</div></div>
+<div class="row"><div>Last Collection</div><div>${selected.lastCollection}</div></div>
+<div class="row"><div>Account Status</div><div>${selected.status}</div></div>
+<div class="row"><div>Reason</div><div>${selected.reason}</div></div>
+<div class="row"><div>Reactivate by Paying</div><div>₹${selected.reactivate}</div></div>
+
 </div>`
 }
 
@@ -204,7 +198,14 @@ renderList(customers.filter(c=>c.name.toLowerCase().includes(val.toLowerCase()))
 function call(){window.location.href="tel:"+selected.phone}
 
 function whatsapp(){
-window.open(`https://wa.me/91${selected.phone}`)
+let msg=`Dear ${selected.name},
+
+Your outstanding balance is ₹${selected.due}.
+
+Kindly make the payment to continue smooth supply.
+
+AAradhya Pharmaceuticals`
+window.open(`https://wa.me/91${selected.phone}?text=${encodeURIComponent(msg)}`)
 }
 
 function navigate(){
@@ -212,7 +213,7 @@ window.open(`https://www.google.com/maps?q=${selected.lat},${selected.lng}`)
 }
 
 function startTour(){
-let route=todayRoute.map(c=>`${c.lat},${c.lng}`).join("/")
+let route=todayRoute.filter(c=>c.lat&&c.lng).map(c=>`${c.lat},${c.lng}`).join("/")
 window.open(`https://www.google.com/maps/dir/${userLat},${userLng}/${route}`)
 }
 
