@@ -1,34 +1,59 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AAradhya Route</title>
+<title>AAradhya Tour</title>
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
 
 <style>
 body{font-family:Poppins;margin:0;background:#f4f6f9}
-.header{background:#0d6efd;color:#fff;padding:15px;font-weight:600}
-
-.routeBox{
-background:#fff;margin:10px;padding:14px;border-radius:12px;
-box-shadow:0 2px 8px rgba(0,0,0,0.08)
-}
-
-.customer{background:#fff;margin:10px;padding:14px;border-radius:12px}
+#launch{height:100vh;display:flex;justify-content:center;align-items:center;text-align:center;background:#0f2027;color:#fff}
+.header{background:#0d6efd;color:#fff;padding:14px;font-weight:600}
+.routeBox{background:#fff;margin:10px;padding:12px;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,0.08)}
+.searchBox{padding:10px;background:#fff}
+input{width:100%;padding:12px;border-radius:10px;border:1px solid #ddd}
+.list{padding:10px;display:grid;gap:10px}
+.customer{background:#fff;padding:14px;border-radius:12px;box-shadow:0 2px 6px rgba(0,0,0,0.08)}
+.card{background:#fff;margin:12px;padding:18px;border-radius:14px}
+.actions{position:fixed;bottom:0;width:100%;background:#fff;display:flex;gap:10px;padding:10px}
+button{flex:1;padding:14px;border:none;border-radius:10px;color:#fff;font-weight:600}
+.call{background:#28a745}.wa{background:#25D366}.nav{background:#0d6efd}
+.tourBtn{background:#ff9800;margin-top:10px}
 </style>
 </head>
 
 <body>
 
-<div class="header">AAradhya Tour</div>
+<div id="launch" onclick="startApp()">
+<div><h2>Welcome to</h2><h1>AAradhya Pharmaceuticals</h1><p>Tap to continue</p></div>
+</div>
 
-<div id="routeBox" class="routeBox">Loading route…</div>
+<div id="listScreen" style="display:none">
 
-<div id="customerList"></div>
+<div class="header">Customers</div>
+
+<div id="routeBox" class="routeBox">📍 Getting today’s route…</div>
+
+<div class="searchBox">
+<input type="text" placeholder="Search customer..." onkeyup="searchCustomer(this.value)">
+<button class="tourBtn" onclick="startTour()">🧭 Start Today’s Tour</button>
+</div>
+
+<div class="list" id="customerList"></div>
+</div>
+
+<div id="profileScreen" style="display:none">
+<div class="header" onclick="goBack()">⬅ Customer Profile</div>
+<div id="profileCard"></div>
+
+<div class="actions">
+<button class="call" onclick="call()">Call</button>
+<button class="wa" onclick="whatsapp()">WhatsApp</button>
+<button class="nav" onclick="navigate()">Navigate</button>
+</div>
+</div>
 
 <script>
-
-const GOOGLE_API_KEY="ef225a4c336c1b21a6780a29406f9e73eb8a714c"
 
 const csvUrl="https://docs.google.com/spreadsheets/d/e/2PACX-1vQ3bMMFf71-vdGNiWFnf7pD9XuAAUSA7J-g08ocyC2LNiVOTUHi56lB-7bKTKj0KK9nJGs9vU0THQ0E/pub?gid=1044390124&single=true&output=csv"
 
@@ -41,30 +66,36 @@ Friday:["Padampur"],
 Saturday:["Paikmal","Mandosil"]
 }
 
+let customers=[],todayRoute=[],selected={}
 let userLat,userLng
-let todayRoute=[]
+
+const today=new Date().toLocaleDateString('en-US',{weekday:'long'})
+const todayAreas=tourPlan[today]||[]
 
 navigator.geolocation.getCurrentPosition(pos=>{
 userLat=pos.coords.latitude
 userLng=pos.coords.longitude
-loadData()
+renderList(customers)
+drawRouteSummary()
 })
 
+function startApp(){
+launch.style.display="none"
+listScreen.style.display="block"
+}
+
+/* CSV PARSER */
 function parseCSV(text){
-const rows=[]
-let row=[],value="",insideQuotes=false
+const rows=[];let row=[],value="",insideQuotes=false
 for(let char of text){
 if(char=='"'){insideQuotes=!insideQuotes;continue}
 if(char==","&&!insideQuotes){row.push(value);value="";continue}
 if((char=="\n"||char=="\r")&&!insideQuotes){
 if(value||row.length){row.push(value);rows.push(row)}
-row=[];value=""
-continue}
+row=[];value="";continue}
 value+=char}
 return rows
 }
-
-function loadData(){
 
 fetch(csvUrl)
 .then(res=>res.text())
@@ -72,58 +103,120 @@ fetch(csvUrl)
 
 let rows=parseCSV(text).slice(1).filter(r=>r[0])
 
-let customers=rows.map(r=>({
+customers=rows.map(r=>({
 name:r[0],
 area:r[1],
+status:r[2],
+due:parseFloat(r[6])||0,
+phone:r[13],
 lat:parseFloat(r[14]),
-lng:parseFloat(r[15])
+lng:parseFloat(r[15]),
+business:r[5],
+reason:r[3],
+reactivate:r[4],
+lastSale:r[17],
+lastCollection:r[18]
 }))
 
-const today=new Date().toLocaleDateString('en-US',{weekday:'long'})
-const todayAreas=tourPlan[today]||[]
+customers.sort((a,b)=>b.due-a.due)
 
-todayRoute=customers.filter(c=>todayAreas.includes(c.area) && c.lat)
+todayRoute=customers.filter(c=>todayAreas.includes(c.area))
 
+showRouteList()
+renderList(customers)
 drawRouteSummary()
 
 })
+
+function showRouteList(){
+routeBox.innerHTML=`<b>🗓 Today’s Route – ${todayAreas.join(", ")}</b><br>
+Parties: ${todayRoute.length}`
 }
 
 function drawRouteSummary(){
 
-let waypoints=todayRoute.map(p=>`${p.lat},${p.lng}`).join("|")
-
-let url=`https://maps.googleapis.com/maps/api/directions/json?origin=${userLat},${userLng}&destination=${todayRoute[todayRoute.length-1].lat},${todayRoute[todayRoute.length-1].lng}&waypoints=${waypoints}&key=${GOOGLE_API_KEY}`
-
-fetch(url)
-.then(res=>res.json())
-.then(data=>{
+if(!userLat || todayRoute.length===0) return
 
 let totalDistance=0
-let totalTime=0
 
-data.routes[0].legs.forEach(leg=>{
-totalDistance+=leg.distance.value
-totalTime+=leg.duration.value
+todayRoute.forEach(p=>{
+if(p.lat){
+totalDistance+=getDistanceValue(userLat,userLng,p.lat,p.lng)
+}
 })
 
-routeBox.innerHTML=`
-<h3>🗓 Today’s Route</h3>
-Parties: ${todayRoute.length}<br>
-📏 ${(totalDistance/1000).toFixed(1)} km<br>
-⏱ ${(totalTime/3600).toFixed(1)} hrs<br><br>
-<button onclick="startTour()">Start Navigation</button>
-`
+let avgSpeed=25
+let time=(totalDistance/avgSpeed).toFixed(1)
 
+routeBox.innerHTML+=`<br>📏 ${totalDistance.toFixed(1)} km
+<br>⏱ ${time} hrs`
+}
+
+function getDistanceValue(lat1,lng1,lat2,lng2){
+const R=6371
+const dLat=(lat2-lat1)*Math.PI/180
+const dLng=(lng2-lng1)*Math.PI/180
+const a=Math.sin(dLat/2)**2+
+Math.cos(lat1*Math.PI/180)*
+Math.cos(lat2*Math.PI/180)*
+Math.sin(dLng/2)**2
+return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a))
+}
+
+function renderList(data){
+customerList.innerHTML=""
+data.forEach((c,i)=>{
+let bg="#fff"
+if(c.status?.toLowerCase().includes("blocked")) bg="#ffebee"
+else if(c.due>0) bg="#fff3cd"
+
+customerList.innerHTML+=`
+<div class="customer" onclick="openProfile(${i})" style="background:${bg}">
+${c.name}<br>
+<small>Due ₹${c.due}</small>
+</div>`
 })
 }
 
-function startTour(){
+function openProfile(i){
+selected=customers[i]
+listScreen.style.display="none"
+profileScreen.style.display="block"
 
-let route=todayRoute.map(p=>`${p.lat},${p.lng}`).join("/")
+profileCard.innerHTML=`
+<div class="card">
+<h3>${selected.name}</h3>
+Phone: ${selected.phone}<br>
+Area: ${selected.area}<br>
+Total Due: ₹${selected.due}
+</div>`
+}
+
+function goBack(){
+profileScreen.style.display="none"
+listScreen.style.display="block"
+}
+
+function searchCustomer(val){
+renderList(customers.filter(c=>c.name.toLowerCase().includes(val.toLowerCase())))
+}
+
+function call(){window.location.href="tel:"+selected.phone}
+
+function whatsapp(){
+window.open(`https://wa.me/91${selected.phone}`)
+}
+
+function navigate(){
+window.open(`https://www.google.com/maps?q=${selected.lat},${selected.lng}`)
+}
+
+function startTour(){
+let route=todayRoute.map(c=>`${c.lat},${c.lng}`).join("/")
 window.open(`https://www.google.com/maps/dir/${userLat},${userLng}/${route}`)
 }
 
 </script>
+
 </body>
-</html
+</html>
