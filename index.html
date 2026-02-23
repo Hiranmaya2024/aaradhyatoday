@@ -2,13 +2,17 @@
 <html lang="en">
 <head>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AAradhya Tour</title>
+<title>Aaradhya Tour</title>
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
 
 <style>
+
 body{font-family:Poppins;margin:0;background:#f4f6f9}
+
+/* HEADER */
 .header{background:#0d6efd;color:#fff;padding:14px;font-weight:600}
 
+/* ROUTE BOX */
 .routeBox{
 background:#fff;margin:10px;padding:14px;border-radius:14px;
 display:grid;grid-template-columns:1fr 1fr;gap:10px;
@@ -17,40 +21,61 @@ box-shadow:0 2px 10px rgba(0,0,0,0.08)
 
 .partyList{max-height:160px;overflow:auto;font-size:13px}
 
+/* GRID */
 .grid{padding:10px;display:grid;gap:12px}
-.customer{background:#fff;padding:14px;border-radius:12px;box-shadow:0 2px 6px rgba(0,0,0,0.08)}
-
-.card{background:#fff;margin:12px;padding:18px;border-radius:14px}
-
-.actions{position:fixed;bottom:0;width:100%;background:#fff;display:flex;gap:10px;padding:10px}
-button{flex:1;padding:12px;border:none;border-radius:10px;color:#fff;font-weight:600}
-.call{background:#28a745}.wa{background:#25D366}.nav{background:#0d6efd}
-.tour{background:#ff9800;margin-top:10px;width:100%}
+.customer{
+background:#fff;padding:14px;border-radius:12px;
+box-shadow:0 2px 6px rgba(0,0,0,0.08)
+}
 
 @media(min-width:700px){.grid{grid-template-columns:1fr 1fr}}
 @media(min-width:1000px){.grid{grid-template-columns:1fr 1fr 1fr}}
+
+/* PROFILE */
+.profileWrapper{background:#f4f6f9;min-height:100vh}
+
+.profileHeader{
+background:linear-gradient(135deg,#2b6cb0,#1e4e8c);
+color:#fff;padding:18px;font-size:18px;font-weight:600
+}
+
+.profileHeader small{display:block;font-size:14px}
+
+.profileCard{
+background:#fff;margin:15px;padding:18px;border-radius:18px;
+box-shadow:0 6px 16px rgba(0,0,0,0.15)
+}
+
+.info{margin:8px 0}
+
+.actionRow{display:flex;gap:10px;margin-top:20px}
+
+.actionRow button{
+flex:1;padding:14px;border:none;border-radius:10px;
+color:#fff;font-weight:600;font-size:15px
+}
+
+.call{background:#34a853}
+.wa{background:#25D366}
+.nav{background:#2b6cb0}
+.tour{background:#ff9800;margin-top:10px;width:100%}
 
 </style>
 </head>
 
 <body>
 
-<div class="header">AAradhya Tour Dashboard</div>
+<div id="mainScreen">
 
-<div id="routeBox" class="routeBox">Loading route…</div>
+<div class="header">Aaradhya Tour Dashboard</div>
+
+<div id="routeBox" class="routeBox"></div>
 
 <div id="customerGrid" class="grid"></div>
 
-<div id="profileScreen" style="display:none">
-<div class="header" onclick="goBack()">⬅ Customer Profile</div>
-<div id="profileCard"></div>
+</div>
 
-<div class="actions">
-<button class="call" onclick="call()">Call</button>
-<button class="wa" onclick="whatsapp()">WhatsApp</button>
-<button class="nav" onclick="navigate()">Navigate</button>
-</div>
-</div>
+<div id="profileScreen" style="display:none"></div>
 
 <script>
 
@@ -100,6 +125,7 @@ lastSale:r[17],lastCollection:r[18]
 
 customers.sort((a,b)=>b.due-a.due)
 todayRoute=customers.filter(c=>todayAreas.includes(c.area))
+
 renderAll()
 
 })
@@ -160,6 +186,7 @@ ${i+1}. ${c.name}<br>
 `
 
 customerGrid.innerHTML=""
+
 customers.forEach(c=>{
 customerGrid.innerHTML+=`
 <div class="customer" onclick="openProfileByName('${c.name}')">
@@ -171,30 +198,48 @@ ${c.area} | ₹${c.due} | 📍 ${distance(c.lat,c.lng)}
 }
 
 function openProfileByName(name){
+
 selected=customers.find(c=>c.name===name)
-customerGrid.style.display="none"
-routeBox.style.display="none"
+
+mainScreen.style.display="none"
 profileScreen.style.display="block"
 
-profileCard.innerHTML=`
-<div class="card">
-<h3>${selected.name}</h3>
-Phone: <a href="tel:${selected.phone}">${selected.phone}</a><br>
-Area: ${selected.area}<br>
-Total Business: ₹${selected.business}<br>
-Total Due: ₹${selected.due}<br>
-Last Sale: ${selected.lastSale}<br>
-Last Collection: ${selected.lastCollection}<br>
-Status: ${selected.status}<br>
-Reason: ${selected.reason}<br>
-Reactivate by Paying: ₹${selected.reactivate}
-</div>`
-}
+profileScreen.innerHTML=`
 
-function goBack(){
-profileScreen.style.display="none"
-customerGrid.style.display="grid"
-routeBox.style.display="grid"
+<div class="profileWrapper">
+
+<div class="profileHeader">
+Aaradhya Tour Dashboard
+<small>- Customer Profile</small>
+</div>
+
+<div class="profileCard">
+
+<h2>${selected.name}</h2>
+
+<div class="info"><b>Phone:</b> <a href="tel:${selected.phone}">${selected.phone}</a></div>
+<div class="info"><b>Agent:</b> ${selected.area}</div>
+
+<div class="info"><b>Total Business:</b> ${selected.business}</div>
+<div class="info"><b>Total Due:</b> ${selected.due}</div>
+
+<div class="info"><b>Last Date:</b> ${selected.lastSale}</div>
+<div class="info"><b>Last Collection:</b> ${selected.lastCollection}</div>
+
+<div class="info"><b>Reason:</b> ${selected.status}</div>
+<div class="info"><b>Reason:</b> ${selected.reason}</div>
+
+<div class="info"><b>Recalculate by paying:</b> ${selected.reactivate}</div>
+
+<div class="actionRow">
+<button class="call" onclick="call()">📞 Call</button>
+<button class="wa" onclick="whatsapp()">🟢 WhatsApp</button>
+<button class="nav" onclick="navigate()">📍 Navigate</button>
+</div>
+
+</div>
+</div>
+`
 }
 
 function startTour(){
@@ -207,5 +252,6 @@ function whatsapp(){window.open(`https://wa.me/91${selected.phone}`)}
 function navigate(){window.open(`https://www.google.com/maps?q=${selected.lat},${selected.lng}`)}
 
 </script>
+
 </body>
 </html>
