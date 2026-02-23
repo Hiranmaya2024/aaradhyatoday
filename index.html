@@ -6,44 +6,31 @@
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
 
 <style>
-
 body{font-family:Poppins;margin:0;background:#f4f6f9}
-
-/* HEADER */
 .header{background:#0d6efd;color:#fff;padding:14px;font-weight:600}
 
-/* ROUTE BOX */
 .routeBox{
 background:#fff;margin:10px;padding:14px;border-radius:14px;
-display:grid;grid-template-columns:1fr 1fr;gap:10px;
+display:grid;grid-template-columns:1fr 1fr;gap:12px;
 box-shadow:0 2px 10px rgba(0,0,0,0.08)
 }
 
-.partyList{max-height:160px;overflow:auto;font-size:13px}
+.partyList{max-height:170px;overflow:auto;font-size:13px}
 
-/* GRID */
 .grid{padding:10px;display:grid;gap:12px}
-.customer{
-background:#fff;padding:14px;border-radius:12px;
-box-shadow:0 2px 6px rgba(0,0,0,0.08)
-}
+.customer{background:#fff;padding:14px;border-radius:12px;box-shadow:0 2px 6px rgba(0,0,0,0.08)}
 
 @media(min-width:700px){.grid{grid-template-columns:1fr 1fr}}
 @media(min-width:1000px){.grid{grid-template-columns:1fr 1fr 1fr}}
 
-/* PROFILE */
 .profileWrapper{background:#f4f6f9;min-height:100vh}
-
 .profileHeader{
 background:linear-gradient(135deg,#2b6cb0,#1e4e8c);
 color:#fff;padding:18px;font-size:18px;font-weight:600;
 display:flex;align-items:center;gap:10px
 }
 
-.backBtn{
-background:#ffffff33;border:none;color:#fff;
-padding:6px 12px;border-radius:8px;font-size:14px
-}
+.backBtn{background:#ffffff33;border:none;color:#fff;padding:6px 12px;border-radius:8px}
 
 .profileCard{
 background:#fff;margin:15px;padding:18px;border-radius:18px;
@@ -51,19 +38,13 @@ box-shadow:0 6px 16px rgba(0,0,0,0.15)
 }
 
 .info{margin:8px 0}
-
 .actionRow{display:flex;gap:10px;margin-top:20px}
-
-.actionRow button{
-flex:1;padding:14px;border:none;border-radius:10px;
-color:#fff;font-weight:600;font-size:15px
-}
+.actionRow button{flex:1;padding:14px;border:none;border-radius:10px;color:#fff;font-weight:600}
 
 .call{background:#34a853}
 .wa{background:#25D366}
 .nav{background:#2b6cb0}
 .tour{background:#ff9800;margin-top:10px;width:100%}
-
 </style>
 </head>
 
@@ -83,6 +64,9 @@ color:#fff;font-weight:600;font-size:15px
 
 <script>
 
+const HQ_LAT = 20.9964
+const HQ_LNG = 83.0526
+
 const csvUrl="https://docs.google.com/spreadsheets/d/e/2PACX-1vQ3bMMFf71-vdGNiWFnf7pD9XuAAUSA7J-g08ocyC2LNiVOTUHi56lB-7bKTKj0KK9nJGs9vU0THQ0E/pub?gid=1044390124&single=true&output=csv"
 
 const tourPlan={
@@ -91,16 +75,9 @@ Thursday:["Dava"],Friday:["Padampur"],Saturday:["Paikmal","Mandosil"]
 }
 
 let customers=[],todayRoute=[],selected={}
-let userLat,userLng
 
 const today=new Date().toLocaleDateString('en-US',{weekday:'long'})
 const todayAreas=tourPlan[today]||[]
-
-navigator.geolocation.getCurrentPosition(pos=>{
-userLat=pos.coords.latitude
-userLng=pos.coords.longitude
-renderAll()
-})
 
 function parseCSV(text){
 const rows=[];let row=[],value="",insideQuotes=false
@@ -146,30 +123,54 @@ score+=c.due/1000
 return score
 }
 
-function distance(lat,lng){
-if(!lat||!userLat) return "—"
+function getDist(a,b,c,d){
 const R=6371
-const dLat=(lat-userLat)*Math.PI/180
-const dLng=(lng-userLng)*Math.PI/180
-const a=Math.sin(dLat/2)**2+
-Math.cos(userLat*Math.PI/180)*Math.cos(lat*Math.PI/180)*
+const dLat=(c-a)*Math.PI/180
+const dLng=(d-b)*Math.PI/180
+const x=Math.sin(dLat/2)**2+
+Math.cos(a*Math.PI/180)*Math.cos(c*Math.PI/180)*
 Math.sin(dLng/2)**2
-return (R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a))).toFixed(1)+" km"
+return R*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x))
+}
+
+function calcRoute(){
+
+let total=0
+let prevLat=HQ_LAT
+let prevLng=HQ_LNG
+
+todayRoute.forEach(p=>{
+if(p.lat){
+total+=getDist(prevLat,prevLng,p.lat,p.lng)
+prevLat=p.lat
+prevLng=p.lng
+}
+})
+
+total+=getDist(prevLat,prevLng,HQ_LAT,HQ_LNG)
+
+return total
 }
 
 function renderAll(){
 
+let totalDist=calcRoute()
+let time=(totalDist/25).toFixed(1)
+
 routeBox.innerHTML=`
 <div>
 <b>🗓 Today’s Route – ${todayAreas.join(", ")}</b><br>
-Parties: ${todayRoute.length}
+Total Parties: ${todayRoute.length}<br>
+📏 ${totalDist.toFixed(1)} km<br>
+⏱ ${time} hrs
 <button class="tour" onclick="startTour()">🧭 Start Tour</button>
 </div>
 
 <div class="partyList">
 ${todayRoute.map((c,i)=>`
 <div onclick="openProfileByName('${c.name}')">
-${i+1}. ${c.name}<br>📍 ${distance(c.lat,c.lng)}
+${i+1}. ${c.name}<br>
+📍 ${getDist(HQ_LAT,HQ_LNG,c.lat,c.lng).toFixed(1)} km
 </div>`).join("")}
 </div>
 `
@@ -188,11 +189,15 @@ else if(creditDays>60) tag="🟡 FOLLOW UP"
 customerGrid.innerHTML+=`
 <div class="customer" onclick="openProfileByName('${c.name}')">
 <b>${c.name}</b><br>
-${c.area} | ₹${c.due} | 📍 ${distance(c.lat,c.lng)}<br>
-${tag}
+${c.area} | ₹${c.due}<br>${tag}
 </div>`
 })
 
+}
+
+function startTour(){
+let route=todayRoute.map(c=>`${c.lat},${c.lng}`).join("/")
+window.open(`https://www.google.com/maps/dir/${HQ_LAT},${HQ_LNG}/${route}/${HQ_LAT},${HQ_LNG}`)
 }
 
 function openProfileByName(name){
@@ -203,12 +208,11 @@ mainScreen.style.display="none"
 profileScreen.style.display="block"
 
 profileScreen.innerHTML=`
-
 <div class="profileWrapper">
 
 <div class="profileHeader">
 <button class="backBtn" onclick="goBack()">⬅ Back</button>
-Aaradhya Tour Dashboard
+Customer Profile
 </div>
 
 <div class="profileCard">
@@ -237,11 +241,6 @@ Aaradhya Tour Dashboard
 function goBack(){
 profileScreen.style.display="none"
 mainScreen.style.display="block"
-}
-
-function startTour(){
-let route=todayRoute.map(c=>`${c.lat},${c.lng}`).join("/")
-window.open(`https://www.google.com/maps/dir/${userLat},${userLng}/${route}`)
 }
 
 function call(){window.location.href="tel:"+selected.phone}
