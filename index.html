@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Aaradhya Tour Dashboard</title>
+<title>Aaradhya Recovery Dashboard</title>
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
 
 <style>
@@ -21,7 +21,7 @@ box-shadow:0 2px 10px rgba(0,0,0,0.08)
 
 .partyList{max-height:160px;overflow:auto;font-size:13px}
 
-/* CUSTOMER GRID */
+/* GRID */
 .grid{padding:10px;display:grid;gap:12px}
 .customer{
 background:#fff;padding:14px;border-radius:12px;
@@ -36,10 +36,14 @@ box-shadow:0 2px 6px rgba(0,0,0,0.08)
 
 .profileHeader{
 background:linear-gradient(135deg,#2b6cb0,#1e4e8c);
-color:#fff;padding:18px;font-size:18px;font-weight:600
+color:#fff;padding:18px;font-size:18px;font-weight:600;
+display:flex;align-items:center;gap:10px
 }
 
-.profileHeader small{display:block;font-size:14px}
+.backBtn{
+background:#ffffff33;border:none;color:#fff;
+padding:6px 12px;border-radius:8px;font-size:14px
+}
 
 .profileCard{
 background:#fff;margin:15px;padding:18px;border-radius:18px;
@@ -67,7 +71,7 @@ color:#fff;font-weight:600;font-size:15px
 
 <div id="mainScreen">
 
-<div class="header">Aaradhya Tour Dashboard</div>
+<div class="header">Aaradhya Recovery Dashboard</div>
 
 <div id="routeBox" class="routeBox"></div>
 
@@ -123,12 +127,24 @@ lat:parseFloat(r[14]),lng:parseFloat(r[15]),
 lastSale:r[17],lastCollection:r[18]
 }))
 
-customers.sort((a,b)=>b.due-a.due)
 todayRoute=customers.filter(c=>todayAreas.includes(c.area))
+
+customers.sort((a,b)=>getRecoveryScore(b)-getRecoveryScore(a))
 
 renderAll()
 
 })
+
+function getRecoveryScore(c){
+const today=new Date()
+const creditDays=Math.floor((today-new Date(c.lastSale))/86400000)
+let score=0
+if(c.status.toLowerCase().includes("blocked")) score+=1000
+if(creditDays>90) score+=500
+else if(creditDays>60) score+=300
+score+=c.due/1000
+return score
+}
 
 function distance(lat,lng){
 if(!lat||!userLat) return "—"
@@ -143,109 +159,67 @@ return (R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a))).toFixed(1)+" km"
 
 function renderAll(){
 
-let totalDist=0,prevLat=userLat,prevLng=userLng
-
-todayRoute.forEach(p=>{
-if(p.lat){
-totalDist+=parseFloat(distanceValue(prevLat,prevLng,p.lat,p.lng))
-prevLat=p.lat;prevLng=p.lng}})
-
-let time=(totalDist/25).toFixed(1)
-
 routeBox.innerHTML=`
 <div>
 <b>🗓 Today’s Route – ${todayAreas.join(", ")}</b><br>
-Parties: ${todayRoute.length}<br>
-📏 ${totalDist.toFixed(1)} km<br>
-⏱ ${time} hrs
+Parties: ${todayRoute.length}
 <button class="tour" onclick="startTour()">🧭 Start Tour</button>
 </div>
 
 <div class="partyList">
 ${todayRoute.map((c,i)=>`
 <div onclick="openProfileByName('${c.name}')">
-${i+1}. ${c.name}<br>
-📍 ${distance(c.lat,c.lng)}
+${i+1}. ${c.name}<br>📍 ${distance(c.lat,c.lng)}
 </div>`).join("")}
 </div>
 `
 
 customerGrid.innerHTML=""
+
 customers.forEach(c=>{
+
+let creditDays=Math.floor((new Date()-new Date(c.lastSale))/86400000)
+
+let tag=""
+if(c.status.toLowerCase().includes("blocked")) tag="🔴 BLOCKED"
+else if(c.due>0 && creditDays>60) tag="💰 COLLECT NOW"
+else if(creditDays>60) tag="🟡 FOLLOW UP"
+
 customerGrid.innerHTML+=`
 <div class="customer" onclick="openProfileByName('${c.name}')">
 <b>${c.name}</b><br>
-${c.area} | ₹${c.due} | 📍 ${distance(c.lat,c.lng)}
+${c.area} | ₹${c.due} | 📍 ${distance(c.lat,c.lng)}<br>
+${tag}
 </div>`
 })
 
-}
-
-function distanceValue(a,b,c,d){
-const R=6371
-const dLat=(c-a)*Math.PI/180
-const dLng=(d-b)*Math.PI/180
-const x=Math.sin(dLat/2)**2+
-Math.cos(a*Math.PI/180)*Math.cos(c*Math.PI/180)*
-Math.sin(dLng/2)**2
-return R*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x))
 }
 
 function openProfileByName(name){
 
 selected=customers.find(c=>c.name===name)
 
-const today=new Date()
-const creditDays=Math.floor((today-new Date(selected.lastSale))/(1000*60*60*24))
-const agingDays=Math.floor((today-new Date(selected.lastCollection))/(1000*60*60*24))
-
-let aging="🟢 Current"
-if(agingDays>30) aging="🟡 Attention"
-if(agingDays>60) aging="🟠 Risk"
-if(agingDays>90) aging="🔴 Critical"
-
-let statusColor=selected.status.toLowerCase().includes("blocked")?"#e53935":"#34a853"
-
-let collectNow=(selected.due>0 && creditDays>60)?`
-<div style="background:#ffebee;color:#c62828;padding:10px;border-radius:10px;font-weight:600;margin-bottom:10px">
-💰 Collect Now – High Credit Days
-</div>`:""
-
 mainScreen.style.display="none"
 profileScreen.style.display="block"
 
 profileScreen.innerHTML=`
+
 <div class="profileWrapper">
 
 <div class="profileHeader">
+<button class="backBtn" onclick="goBack()">⬅ Back</button>
 Aaradhya Tour Dashboard
-<small>- Customer Profile</small>
 </div>
 
 <div class="profileCard">
 
 <h2>${selected.name}</h2>
 
-<div class="info"><b>Status:</b>
-<span style="background:${statusColor};color:#fff;padding:4px 10px;border-radius:20px;font-size:12px">
-${selected.status}
-</span>
-</div>
-
-${collectNow}
-
 <div class="info"><b>Phone:</b> <a href="tel:${selected.phone}">${selected.phone}</a></div>
 <div class="info"><b>Area:</b> ${selected.area}</div>
-
 <div class="info"><b>Total Business:</b> ₹${selected.business}</div>
 <div class="info"><b>Total Due:</b> ₹${selected.due}</div>
-
-<div class="info"><b>Credit Days:</b> ${creditDays} days</div>
-<div class="info"><b>Outstanding Aging:</b> ${aging}</div>
-
-<div class="info"><b>Last Sale:</b> ${selected.lastSale}</div>
-<div class="info"><b>Last Collection:</b> ${selected.lastCollection}</div>
-
+<div class="info"><b>Status:</b> ${selected.status}</div>
 <div class="info"><b>Reason:</b> ${selected.reason}</div>
 <div class="info"><b>Reactivate by paying:</b> ₹${selected.reactivate}</div>
 
@@ -258,6 +232,11 @@ ${collectNow}
 </div>
 </div>
 `
+}
+
+function goBack(){
+profileScreen.style.display="none"
+mainScreen.style.display="block"
 }
 
 function startTour(){
